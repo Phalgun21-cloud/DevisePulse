@@ -61,7 +61,9 @@ const causeText = {
     '. A saturated disk is consistent with slow opening and saving.',
   cpu_throttled: (c) =>
     `The processor ran at ${Math.round(c.evidence.cpuFreqRatio * 100)}% of its top speed while busy. ` +
-    'That may mean it is slowing itself down to stay cool or save power.',
+    (c.evidence.onBattery
+      ? 'The laptop is on battery, so this is most likely power saving; plugging in may make it faster.'
+      : 'That may mean it is slowing itself down to stay cool or save power.'),
 };
 
 export function explainDiagnosis(result) {

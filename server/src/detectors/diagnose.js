@@ -90,11 +90,15 @@ export function diagnose(sample, settings, baseline = {}) {
   // 4. Throttling: clock well below its maximum while the CPU is busy
   if (freqRatio === null || cpu === null) skipped.push('cpu_throttled');
   else if (cpu >= s.throttleMinLoadPct && freqRatio < s.throttleFreqRatio) {
+    // On battery the OS lowers the clock on purpose: still reported, but as power saving and ranked lower,
+    // so a program saturating the CPU is not hidden behind it (seen on a real unplugged laptop).
+    const onBattery = sample.pluggedIn === false;
+    const score = s.throttleFreqRatio / Math.max(freqRatio, 0.01);
     causes.push({
       rule: 'cpu_throttled',
-      score: s.throttleFreqRatio / Math.max(freqRatio, 0.01),
+      score: onBattery ? score * 0.5 : score,
       process: null,
-      evidence: { cpuFreqRatio: freqRatio, thresholdRatio: s.throttleFreqRatio, cpuPct: cpu },
+      evidence: { cpuFreqRatio: freqRatio, thresholdRatio: s.throttleFreqRatio, cpuPct: cpu, onBattery },
     });
   }
 

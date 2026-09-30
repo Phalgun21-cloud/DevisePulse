@@ -30,6 +30,7 @@ export const diagnoseSample = z
     diskBusyPct: pct,
     diskLatencyMs: z.number().min(0).max(600_000).nullable(),
     cpuFreqRatio: z.number().min(0).max(5).nullable(),
+    pluggedIn: z.boolean().nullable().optional(), // on battery, a slower clock is power saving by design
     topProcesses: procs,
   })
   .strict();

@@ -185,10 +185,21 @@ function openSqlite(file) {
       }
     },
     async close() {
+      if (raw.isOpen === false) return;
+      openInTests.delete(api);
       raw.close();
     },
   };
+  if (process.env.VITEST) openInTests.add(api);
   return api;
+}
+
+// Test support: databases opened during a test file, closed deterministically afterwards (tests/setup.js)
+// instead of waiting for garbage collection of native node:sqlite handles.
+const openInTests = new Set();
+export async function closeAllOpenDatabases() {
+  for (const db of [...openInTests]) await db.close().catch(() => {});
+  openInTests.clear();
 }
 
 // ---- MySQL -------------------------------------------------------------------------------

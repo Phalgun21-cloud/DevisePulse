@@ -19,6 +19,22 @@ async function signup(app, email = 'a@example.com') {
 
 const auth = (jwt) => ({ Authorization: `Bearer ${jwt}` });
 
+describe('health check', () => {
+  it('reports the database engine when the database answers', async () => {
+    const { app } = makeApp();
+    const res = await request(app).get('/api/health').expect(200);
+    expect(res.body).toEqual({ ok: true, database: 'sqlite' });
+  });
+
+  it('answers 503 (not 200) when the database is unreachable', async () => {
+    const db = openDb(':memory:');
+    const broken = { ...db, dialect: 'mysql', get: async () => { throw new Error('connect ECONNREFUSED'); } };
+    const app = createApp({ db: broken, jwtSecret: SECRET });
+    const res = await request(app).get('/api/health').expect(503);
+    expect(res.body).toEqual({ ok: false, database: 'mysql', error: 'database_unreachable' });
+  });
+});
+
 describe('device detail summary', () => {
   it('a brand-new device reports "collecting" everywhere and nulls, never zeros', async () => {
     const { app } = makeApp();

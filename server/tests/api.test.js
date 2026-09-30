@@ -474,6 +474,14 @@ describe('diagnose command channel', () => {
     await agentPost(app, dev.deviceToken, created.body.id, { sample: { ...sampleBody, cpuPct: 400 } }).expect(400);
   });
 
+  it('accepts the power source with a diagnose sample', async () => {
+    const { app } = makeApp();
+    const jwt = await signup(app);
+    const dev = await addDevice(app, jwt);
+    const c = await userReq(app, jwt, 'post', `/api/devices/${dev.id}/diagnose`).expect(202);
+    await agentPost(app, dev.deviceToken, c.body.id, { sample: { ...sampleBody, pluggedIn: false } }).expect(200);
+  });
+
   it('accepts a grouped process count, but not a nonsense one', async () => {
     const { app } = makeApp();
     const jwt = await signup(app);

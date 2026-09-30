@@ -13,7 +13,7 @@ import time
 from types import SimpleNamespace
 from typing import Optional
 
-from collectors.system import DISK_COUNTERS, PERF_COUNTER, freq_fields, parse_typeperf_columns, typeperf_command
+from collectors.system import DISK_COUNTERS, PERF_COUNTER, freq_fields, parse_typeperf_columns, plugged_in, typeperf_command
 
 TOP_N = 5
 TOP_BY_CPU = 3  # the rest of the slots go to the biggest memory users not already listed

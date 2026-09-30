@@ -15,10 +15,18 @@ param(
   [int]$Port = 4100,
   [int]$HogSeconds = 60,
   [string[]]$Scenarios = @('cpu', 'memory', 'disk'),
+  # 'sqlite' = throwaway SQLite file in OutDir (default). Or a mysql:// URL of a THROWAWAY database (never production).
+  [string]$DatabaseUrl = 'sqlite',
   [switch]$SkipTests
 )
 
 $ErrorActionPreference = 'Stop'
+# With `powershell -File`, "cpu,memory" arrives as ONE string: split it, and refuse unknown names rather than
+# silently skipping a scenario.
+$Scenarios = @($Scenarios | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim().ToLower() } | Where-Object { $_ })
+$unknown = @($Scenarios | Where-Object { $_ -notin 'cpu', 'memory', 'disk' })
+if ($unknown.Count) { throw "Unknown scenario(s): $($unknown -join ', '). Use cpu, memory, disk." }
+Write-Host "Scenarios: $($Scenarios -join ', ')"
 $root = Split-Path -Parent $PSScriptRoot
 $b = "http://localhost:$Port"
 New-Item -ItemType Directory -Force $OutDir | Out-Null
@@ -101,6 +109,9 @@ try {
   $env:PORT = "$Port"
   $env:JWT_SECRET = "e2e-$([guid]::NewGuid().ToString('N'))"
   $env:DATABASE_FILE = Join-Path $OutDir 'e2e.db'
+  # Set explicitly so server\.env's DATABASE_URL (the real database) is never used: dotenv does not override it.
+  $env:DATABASE_URL = $DatabaseUrl
+  $report.database = if ($DatabaseUrl -like 'mysql://*') { 'mysql' } else { 'sqlite' }
   $server = Start-Process node -ArgumentList 'src/index.js' -WorkingDirectory (Join-Path $root 'server') -PassThru -NoNewWindow `
     -RedirectStandardOutput "$OutDir\server.log" -RedirectStandardError "$OutDir\server.err.log"
   $up = $false
@@ -108,7 +119,8 @@ try {
     Start-Sleep -Milliseconds 500
     try { $up = (Invoke-RestMethod "$b/api/health").ok } catch { }
   }
-  Check 'API starts' $up "$b/api/health"
+  $health = if ($up) { Invoke-RestMethod "$b/api/health" } else { $null }
+  Check 'API starts' $up "$b/api/health database=$($health.database)"
   if (-not $up) { throw 'API did not start; see server.err.log' }
 
   # 3. account + device

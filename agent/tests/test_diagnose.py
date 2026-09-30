@@ -239,3 +239,8 @@ def test_handle_command_survives_a_failing_sampler_and_a_failed_post():
 
     assert agent.handle_command({"id": 1, "type": "diagnose"}, "http://x", "t", session=Session(), sampler=broken) is False
     assert agent.handle_command({"id": 1, "type": "diagnose"}, "http://x", "t", session=Session(post_codes=["boom"]), sampler=lambda s: {}) is False
+
+
+def test_sample_carries_the_power_source():
+    assert sample(plugged_in=False)["pluggedIn"] is False
+    assert sample(plugged_in=None)["pluggedIn"] is None

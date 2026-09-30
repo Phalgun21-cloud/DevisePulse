@@ -31,7 +31,15 @@ export function createApp({
   app.use(cors({ origin: corsOrigin }));
   app.use(express.json({ limit: '100kb' }));
 
-  app.get('/api/health', (_req, res) => res.json({ ok: true }));
+  // Health = the API is up AND the database answers (so a host or monitor sees a dead database as unhealthy).
+  app.get('/api/health', async (_req, res) => {
+    try {
+      await db.get('SELECT 1 AS ok');
+      res.json({ ok: true, database: db.dialect });
+    } catch {
+      res.status(503).json({ ok: false, database: db.dialect, error: 'database_unreachable' });
+    }
+  });
 
   app.use('/api/auth', authRoutes({ db, jwtSecret }));
   app.use('/api/devices', requireUser(jwtSecret), deviceRoutes({ db, settings, now }));

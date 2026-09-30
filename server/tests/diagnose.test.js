@@ -75,6 +75,22 @@ describe('diagnose: each rule', () => {
     expect(rules(run({ cpuPct: 80, cpuFreqRatio: 0.6 }))).toContain('cpu_throttled');
   });
 
+  it('on battery, a slow clock is power saving: ranked after an overloaded CPU (real case, 2026-09-30)', () => {
+    // Seen on the real laptop unplugged: cpu_hog at 100% CPU, clock cut by power saving; throttling was ranked first.
+    const r = run({ cpuPct: 100, cpuFreqRatio: 0.5, pluggedIn: false, topProcesses: [{ name: 'python.exe', cpuPct: 64, memMb: 200, count: 11 }] });
+    expect(rules(r)).toEqual(['cpu_saturated', 'cpu_throttled']);
+    const t = r.causes.find((c) => c.rule === 'cpu_throttled');
+    expect(t.evidence.onBattery).toBe(true);
+    expect(explainDiagnosis(r)).toMatch(/on battery/i);
+    expect(explainDiagnosis(r)).toMatch(/plugging in may/i);
+  });
+
+  it('on mains power a slow clock under load still ranks by how far below the limit it is', () => {
+    const r = run({ cpuPct: 100, cpuFreqRatio: 0.5, pluggedIn: true });
+    expect(r.causes[0].rule).toBe('cpu_throttled');
+    expect(r.causes[0].evidence.onBattery).toBe(false);
+  });
+
   it('low frequency at LOW load is power saving, not throttling', () => {
     expect(rules(run({ cpuPct: 10, cpuFreqRatio: 0.3 }))).not.toContain('cpu_throttled');
   });
