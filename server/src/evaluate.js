@@ -5,6 +5,7 @@
 //   * at most one live finding per (device, rule).
 
 import { detectBattery } from './detectors/battery.js';
+import { detectStorage, STORAGE_RULES } from './detectors/storage.js';
 import { explainFinding } from './explain/templates.js';
 
 export function loadBatterySamples(db, deviceId) {
@@ -60,5 +61,35 @@ function syncRule(db, deviceId, rule, detected, cfg, nowIso) {
 export function evaluateBattery(db, deviceId, settings, now = new Date()) {
   const result = detectBattery(loadBatterySamples(db, deviceId), settings, now);
   syncRule(db, deviceId, 'battery_wear', result.findings[0] ?? null, settings.findings, now.toISOString());
+  return result;
+}
+
+const DAY_MS = 86_400_000;
+const STORAGE_LOOKBACK_DAYS = 15; // two error windows plus slack; the baseline window is loaded separately
+
+// The baseline window (first days) plus recent history only: storage readings arrive every 15 minutes.
+export function loadStorageSamples(db, deviceId, settings, now) {
+  const first = db
+    .prepare(`SELECT MIN(ts) AS ts FROM samples WHERE device_id = ? AND kind = 'storage'`)
+    .get(deviceId)?.ts;
+  if (!first) return [];
+  const baseEnd = new Date(Date.parse(first) + settings.storage.baselineDays * DAY_MS).toISOString();
+  const since = new Date(now.getTime() - STORAGE_LOOKBACK_DAYS * DAY_MS).toISOString();
+  return db
+    .prepare(
+      `SELECT ts, "values" AS v FROM samples
+       WHERE device_id = ? AND kind = 'storage' AND (ts < ? OR ts >= ?) ORDER BY ts`,
+    )
+    .all(deviceId, baseEnd, since)
+    .map((r) => ({ ts: r.ts, ...JSON.parse(r.v) }));
+}
+
+export function evaluateStorage(db, deviceId, settings, now = new Date()) {
+  const result = detectStorage(loadStorageSamples(db, deviceId, settings, now), settings, now);
+  for (const rule of STORAGE_RULES) {
+    // Missing data is not a "normal" check: a skipped rule neither confirms nor clears a finding.
+    if (result.skippedRules.includes(rule)) continue;
+    syncRule(db, deviceId, rule, result.findings.find((f) => f.rule === rule) ?? null, settings.findings, now.toISOString());
+  }
   return result;
 }

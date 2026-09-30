@@ -359,6 +359,35 @@ describe('hourly agent uploads', () => {
   });
 });
 
+describe('storage ingest', () => {
+  const storage = (ts, values) => ({
+    ts,
+    kind: 'storage',
+    values: { ioProbeMs: 40, freeSpacePct: 30, percentageUsed: null, criticalWarning: null, ...values },
+  });
+
+  it('a new storage reading runs the storage detector (2 readings -> active finding)', async () => {
+    const { app, db } = makeApp();
+    const jwt = await signup(app);
+    const dev = await addDevice(app, jwt);
+    await ingest(app, dev.deviceToken, [storage('2026-07-04T10:00:00Z', { freeSpacePct: 4 })]).expect(200);
+    expect(count(db, `SELECT COUNT(*) AS n FROM findings WHERE status = 'active'`)).toBe(0);
+    await ingest(app, dev.deviceToken, [storage('2026-07-04T10:15:00Z', { freeSpacePct: 4 })]).expect(200);
+    const res = await request(app).get(`/api/devices/${dev.id}/findings`).set('Authorization', `Bearer ${jwt}`).expect(200);
+    expect(res.body.findings).toHaveLength(1);
+    expect(res.body.findings[0]).toMatchObject({ rule: 'storage_free_space', severity: 'Watch', component: 'storage' });
+  });
+
+  it('rejects a probe time of 0 or below (never a real reading) but accepts null', async () => {
+    const { app } = makeApp();
+    const jwt = await signup(app);
+    const dev = await addDevice(app, jwt);
+    await ingest(app, dev.deviceToken, [storage('2026-07-04T10:00:00Z', { ioProbeMs: 0 })]).expect(400);
+    await ingest(app, dev.deviceToken, [storage('2026-07-04T10:00:00Z', { freeSpacePct: -1 })]).expect(400);
+    await ingest(app, dev.deviceToken, [storage('2026-07-04T10:00:00Z', { ioProbeMs: null, freeSpacePct: null })]).expect(200);
+  });
+});
+
 describe('diagnose command channel', () => {
   const sampleBody = {
     cpuPct: 97,

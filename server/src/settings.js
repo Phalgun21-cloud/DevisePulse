@@ -31,6 +31,17 @@ export const defaultSettings = {
     baselineMinDiagnoses: 3, // prior diagnoses needed before a latency baseline exists
     requestExpiryMinutes: 10, // a pending request nobody collected is dropped after this
   },
+  storage: {
+    wearAttentionPct: 80, // NVMe "percentage used" (rated endurance) at or above this -> Attention
+    errorWindowDays: 7, // media errors / reallocated sectors compared week over week
+    baselineDays: 3, // the device's own first days of timed probes form its baseline
+    minBaselineSamples: 24, // probes needed in the baseline window
+    recentHours: 24, // recent window compared with the baseline (median)
+    minRecentSamples: 12, // probes needed in the recent window
+    slowRatio: 3, // recent median at least this many times the baseline -> slower than usual
+    freeInfoBelowPct: 10,
+    freeWatchBelowPct: 5, // also the "co-moving" signal that lifts a slow disk to Attention
+  },
 };
 
 export function withOverrides(overrides = {}) {
@@ -39,5 +50,6 @@ export function withOverrides(overrides = {}) {
     findings: { ...defaultSettings.findings, ...(overrides.findings ?? {}) },
     battery: { ...defaultSettings.battery, ...(overrides.battery ?? {}) },
     diagnose: { ...defaultSettings.diagnose, ...(overrides.diagnose ?? {}) },
+    storage: { ...defaultSettings.storage, ...(overrides.storage ?? {}) },
   };
 }

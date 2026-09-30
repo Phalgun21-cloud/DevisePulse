@@ -1,0 +1,20 @@
+{
+  "_fixture_note": "HAND-WRITTEN, not captured: shaped like `smartctl -j -a /dev/sda` for a SATA HDD (smartmontools 7.x JSON). Replace with real output when available.",
+  "json_format_version": [1, 0],
+  "smartctl": { "version": [7, 4], "exit_status": 0 },
+  "device": { "name": "/dev/sda", "info_name": "/dev/sda [SAT]", "type": "sat", "protocol": "ATA" },
+  "model_name": "EXAMPLE HDD 500GB",
+  "smart_status": { "passed": true },
+  "ata_smart_attributes": {
+    "revision": 16,
+    "table": [
+      { "id": 1, "name": "Raw_Read_Error_Rate", "value": 200, "worst": 200, "thresh": 51, "raw": { "value": 0, "string": "0" } },
+      { "id": 5, "name": "Reallocated_Sector_Ct", "value": 199, "worst": 199, "thresh": 140, "raw": { "value": 16, "string": "16" } },
+      { "id": 9, "name": "Power_On_Hours", "value": 70, "worst": 70, "thresh": 0, "raw": { "value": 22000, "string": "22000" } },
+      { "id": 197, "name": "Current_Pending_Sector", "value": 200, "worst": 200, "thresh": 0, "raw": { "value": 2, "string": "2" } },
+      { "id": 198, "name": "Offline_Uncorrectable", "value": 100, "worst": 253, "thresh": 0, "raw": { "value": 0, "string": "0" } }
+    ]
+  },
+  "temperature": { "current": 34 },
+  "power_on_time": { "hours": 22000 }
+}

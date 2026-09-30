@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { evaluateBattery } from '../evaluate.js';
+import { evaluateBattery, evaluateStorage } from '../evaluate.js';
 
 const scalar = z.union([z.number(), z.string().max(200), z.boolean(), z.null()]);
 const DAY_MS = 86_400_000;
@@ -17,6 +17,16 @@ const sample = z
       const good = (n) => typeof n === 'number' && n > 0 && n < 1000;
       if (!good(designWh) || !good(fullChargeWh)) {
         ctx.addIssue({ code: 'custom', message: 'battery needs positive designWh and fullChargeWh' });
+      }
+    }
+    if (s.kind === 'storage') {
+      const { ioProbeMs, freeSpacePct } = s.values;
+      // null means "not measured"; a zero or negative time is never a real reading.
+      if (ioProbeMs !== undefined && ioProbeMs !== null && !(typeof ioProbeMs === 'number' && ioProbeMs > 0)) {
+        ctx.addIssue({ code: 'custom', message: 'ioProbeMs must be a positive number or null' });
+      }
+      if (freeSpacePct !== undefined && freeSpacePct !== null && !(typeof freeSpacePct === 'number' && freeSpacePct >= 0 && freeSpacePct <= 100)) {
+        ctx.addIssue({ code: 'custom', message: 'freeSpacePct must be 0-100 or null' });
       }
     }
   });
@@ -41,6 +51,7 @@ export function ingestRoutes({ db, settings, now }) {
     );
     let stored = 0;
     let newBattery = 0;
+    let newStorage = 0;
     db.exec('BEGIN');
     try {
       for (const s of samples) {
@@ -48,6 +59,7 @@ export function ingestRoutes({ db, settings, now }) {
         if (info.changes > 0) {
           stored += 1;
           if (s.kind === 'battery') newBattery += 1;
+          if (s.kind === 'storage') newStorage += 1;
         }
       }
       db.prepare('UPDATE devices SET last_seen = ? WHERE id = ?').run(clock.toISOString(), req.device.id);
@@ -60,6 +72,7 @@ export function ingestRoutes({ db, settings, now }) {
     // Trend detectors run only when a new battery reading arrived, so "two consecutive
     // detections" means two battery readings apart, not two one-minute CPU samples.
     if (newBattery > 0) evaluateBattery(db, req.device.id, settings, clock);
+    if (newStorage > 0) evaluateStorage(db, req.device.id, settings, clock);
 
     res.json({ received: samples.length, stored, duplicates: samples.length - stored });
   });

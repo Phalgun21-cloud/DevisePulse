@@ -60,6 +60,11 @@ python agent\probe.py --save
 - Disk busy % and latency on Windows come from the `PhysicalDisk(_Total)` performance counters, never psutil (whose
   Windows time counters read 0.1% busy during a 40 GB write). Elsewhere psutil deltas; `null` when operations were counted
   but no time was. A latency of 0 is never sent. Swap activity is `null` on Windows.
+- Slow disk (Tier B latency) alone never goes above Watch, however long it lasts (rule 3 kept strict; decided by the
+  user 2026-09-30). Attention needs free space < 5% or a SMART finding at the same time.
+- Storage: media errors / reallocated sectors rising in two consecutive weeks = Attention, one weekly rise = Watch;
+  SATA pending sectors > 0 = Attention; NVMe critical warning, spare <= threshold or SMART "failed" = Urgent.
+  A rule skipped for missing data is not a normal check: it neither confirms nor clears a finding.
 - Top processes are grouped by name (summed CPU and memory, with a `count`) before ranking.
 - The agent sends process NAMES only (top 5, with CPU % and memory MB), never command lines, paths or arguments.
   The server's diagnose schema is `.strict()` and rejects any extra field.
@@ -79,7 +84,7 @@ python agent\probe.py --save
 | NVMe wear 85% used | Attention | Urgent |
 | NVMe critical warning or spare at threshold | Urgent, back up now | Only Watch |
 | Media errors rising week over week | Attention | No finding |
-| Slow disk, persistent (4x baseline for 3 days) | Watch by day 1, Attention by day 3 | Urgent |
+| Slow disk, persistent (4x baseline for 3 days) | Watch by day 1, still Watch on day 3 when alone; Attention only if free space < 5% or a SMART signal co-moves | Urgent; Attention from latency alone |
 | Slow disk, one-hour spike | No finding | Any active finding |
 | Hotter at same load (+12 C) | Watch; with frequency drop Attention | Urgent |
 | Hotter because busier | No finding | Any thermal finding |
@@ -103,7 +108,7 @@ Task 2 (slow-laptop diagnosis) DONE: command channel, 10 s sample, ranked causes
 
 1. **Probe results.** (Gate met on 1 laptop, a Dell Inspiron 15 5510: powercfg capacity reads and the parser is confirmed; other demo laptops not probed yet.) Run the probe on every demo laptop, commit `docs/probe-results/*.json`. Gate: battery capacity reads on at least one laptop. Confirm the powercfg parser on real Windows.
 2. **DONE: Slow-laptop diagnosis.** Agent samples 10 s of CPU, memory, disk busy and top 5 processes. Add a command channel: server creates a pending diagnose request, agent polls `GET /api/agent/commands` every 15 s and posts the sample, page polls for ranked causes. Rules: CPU >= 85%, memory >= 90% or swap activity, disk busy > 80% or latency 3x baseline, throttling (frequency ratio < 0.75 at high load), else "no clear cause". Gate: unit tests, then `chaos/cpu_hog.py` on a real laptop names the hog process.
-3. **Storage health.** Tier A: `smartctl -j -a` (NVMe critical warning, spare at threshold, percentage used >= 80, media errors rising; SATA reallocated/pending sectors). Tier B: agent times an 8 MB write + fsync + read every 15 min, compare 24 h median with the device's own first-3-days baseline (3x). Free space < 10% Information, < 5% Watch. Wording never says the drive will fail. Gate: scenario rows for storage pass.
+3. **DONE (Tier B real, Tier A fixtures only): Storage health.** Tier A: `smartctl -j -a` (NVMe critical warning, spare at threshold, percentage used >= 80, media errors rising; SATA reallocated/pending sectors). Tier B: agent times an 8 MB write + fsync + read every 15 min, compare 24 h median with the device's own first-3-days baseline (3x). Free space < 10% Information, < 5% Watch. Wording never says the drive will fail. Gate: scenario rows for storage pass.
 4. **Thermal detector.** Temperature at similar load (20-point load buckets) versus first-7-day baseline, +10 C Watch; add frequency drop for Attention. Windows usually does not expose temperature or fans, so expect simulated data only and say so in the UI.
 5. **Simulator scenarios and accuracy run.** Add every scenario above plus the 200-healthy-device run. Save results to `docs/test-results.md`. Gate: aggregate targets met.
 6. **Web dashboard** (React, Vite, React Router, Tailwind, Recharts, Axios). Screens: login/register, devices (with one-time token and agent command), device detail (component cards, battery chart with baseline and forecast range, findings with evidence expander), diagnose, fleet demo (banner "Synthetic data", planted model+BIOS correlation with sample size). Gate: browser end-to-end test passes.

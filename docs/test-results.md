@@ -95,7 +95,8 @@ seen failing on import before the code existed.
 | Diagnosis: swap activity | Not available (rule uses memory % only) | psutil cannot measure paging on Windows |
 | Diagnosis: disk busy / latency | **Real** (from 2b on) | Windows PhysicalDisk counters; psutil's are wrong on Windows |
 | Storage Tier A (SMART) | **Simulated / fixtures only** | smartctl not installed |
-| Storage Tier B (timed write/read) | Real once built (task 3) | needs only a temp file |
+| Storage Tier B (timed write/read) | **Real** (probe runs; findings need 3 days of baseline) | needs only a temp file |
+| Storage free space | **Real** (10.1% at probe time) | shutil.disk_usage |
 | Thermal (temperature at same load) | **Simulated only** | no temperature source |
 | Thermal fallback (frequency drop under load) | Real frequency available | Windows performance counter |
 
@@ -126,6 +127,44 @@ The e2e script itself needed two fixes during the run (shown as FAILs in earlier
 held open by cpu_hog's worker processes, and force-stopping hogs skipped their cleanup. Hogs now each get their own stdin file
 and are allowed to finish on their own.
 
+## Task 3: storage health, 2026-09-30
+
+Built: `server/src/detectors/storage.js` (5 rules), `evaluateStorage` in `evaluate.js` (2-to-show / 3-to-clear lifecycle,
+run only when a new storage reading arrives), storage explanations, ingest validation (probe time must be > 0 or null,
+free space 0-100 or null), `agent/collectors/storage.py` (smartctl JSON parser, timed 8 MB write+fsync+read, free space),
+agent sends a storage sample every 15 min (`--storage-every 900`). Seeded storage scenarios in `simulator/generate.js`.
+Tests: **server 106 passed (106)** (32 new in `storage.test.js`, 2 new in `api.test.js`), **agent 78 passed**.
+Test-first: `storage.test.js` failed on the missing module, the 2 API tests failed (`expected [] to have a length of 1`,
+`expected 400, got 200`), `test_storage.py` failed on import, before the code was written.
+
+**Mutation check** (each change made the suite fail, code restored afterwards, 32/32 passing again):
+recent median replaced by max -> the one-hour-spike test failed; slow disk alone forced to Attention -> 3 tests failed;
+skipped rules treated as normal checks -> the "SMART went missing does not clear a finding" test failed.
+
+| Scenario | Result |
+| --- | --- |
+| Healthy storage, 30 days | nothing above Information |
+| NVMe wear 85% | Attention, not Urgent |
+| NVMe critical warning / spare at threshold | Urgent, explanation says back up now |
+| Media errors 0 -> 2 -> 6 over 3 weeks | Attention; a single weekly rise is Watch |
+| SATA pending sectors | Attention |
+| Slow disk 4x from day 7 | Watch by end of day 1 (lifecycle: active before day 8), **still Watch on day 3** |
+| Slow disk 4x + free space 4% | Attention (co-moving), never Urgent |
+| One-hour 10x spike | no finding at any point, no active finding through the real lifecycle |
+| Free space 8% / 4% / 20% | Information / Watch / nothing |
+| No SMART | SMART rules skipped, probe rule still runs |
+| All null, no samples, probe times of 0 | no crash, no finding, zeros ignored |
+
+**Decision recorded (user, 2026-09-30):** the scenario table said "Attention by day 3" for a persistent slow disk, which
+conflicts with rule 3 (one signal never above Watch). The user chose to keep rule 3: slow disk alone stays Watch; the
+table row in CLAUDE.md was changed to match. No threshold was changed to make a test pass.
+
+**Real on this laptop:** Tier B only. Timed probe 17.98 / 20.47 / 28.96 ms in three runs; no probe file left in %TEMP%.
+Free space on the system drive **10.1%** (just above the 10% Information line). A real agent `--once` upload stored the
+storage sample with all SMART fields `null`; no finding (baseline needs 3 days, free space not below 10%).
+**Tier A (SMART) is fixtures only:** smartctl is not installed and nothing was installed. The two fixtures
+(`agent/tests/fixtures/smartctl_nvme.json`, `smartctl_sata.json`) are HAND-WRITTEN in smartmontools' JSON shape, not captured.
+
 ## Also verified by hand
 - Real server + real agent, one upload: sample stored, missing CPU temperature kept as null (not zero).
 - Wrong device token: server answers 401, agent keeps the sample buffered.
@@ -135,7 +174,9 @@ and are allowed to finish on their own.
 - Probe on any laptop other than the Dell Inspiron 15 5510 (task 1 asks for every demo laptop).
 - The throttling rule against a laptop that actually throttles (only the counter reading was verified, not a throttle event).
 - Task 2: disk_saturated firing on real hardware (this NVMe could not be saturated), and the throttling rule firing (no throttle event produced). Request expiry was tested only in Vitest, not by waiting 10 minutes on the real agent.
-- Storage and thermal detectors: not built yet.
+- Storage Tier A on a real drive: the smartctl parser has only seen hand-written fixtures. Needs smartctl (and usually Administrator) on a demo laptop.
+- Storage Tier B over days on a real laptop: the 3-day baseline, the 24 h median and a real slow-disk finding have only run on simulated data.
+- Thermal detector: not built yet.
 - Real-device fault injection (chaos/), 48-hour soak, web dashboard, end-to-end browser test.
 - Scenario accuracy over 200 healthy simulated devices (only the battery scenarios exist so far).
 

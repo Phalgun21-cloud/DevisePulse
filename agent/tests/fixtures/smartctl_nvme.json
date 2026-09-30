@@ -1,0 +1,23 @@
+{
+  "_fixture_note": "HAND-WRITTEN, not captured: shaped like `smartctl -j -a /dev/nvme0` (smartmontools 7.x JSON). No smartctl on the first demo laptop. Replace with real output when available.",
+  "json_format_version": [1, 0],
+  "smartctl": { "version": [7, 4], "exit_status": 0 },
+  "device": { "name": "/dev/nvme0", "info_name": "/dev/nvme0", "type": "nvme", "protocol": "NVMe" },
+  "model_name": "EXAMPLE NVMe 512GB",
+  "smart_status": { "passed": true, "nvme": { "value": 0 } },
+  "nvme_smart_health_information_log": {
+    "critical_warning": 0,
+    "temperature": 38,
+    "available_spare": 100,
+    "available_spare_threshold": 10,
+    "percentage_used": 85,
+    "data_units_read": 51234567,
+    "data_units_written": 61234567,
+    "power_on_hours": 9876,
+    "unsafe_shutdowns": 57,
+    "media_errors": 3,
+    "num_err_log_entries": 12
+  },
+  "temperature": { "current": 38 },
+  "power_on_time": { "hours": 9876 }
+}

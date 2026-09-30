@@ -33,6 +33,7 @@ def build_payload(
     battery: Optional[dict],
     system: Optional[dict],
     ts: Optional[str] = None,
+    storage: Optional[dict] = None,
 ) -> list[dict]:
     """Pure. Turn readings into the sample list the API expects.
 
@@ -44,7 +45,20 @@ def build_payload(
         samples.append({"ts": stamp, "kind": "battery", "values": battery})
     if system:
         samples.append({"ts": stamp, "kind": "cpu", "values": system})
+    if storage:
+        samples.append({"ts": stamp, "kind": "storage", "values": storage})
     return samples
+
+
+def collect_storage() -> Optional[dict]:
+    """Timed disk probe + free space + SMART (if smartctl is available). Never raises."""
+    try:
+        from collectors.storage import read_storage
+
+        return read_storage()
+    except Exception as exc:  # noqa: BLE001
+        print(f"[agent] storage read failed: {exc}", file=sys.stderr)
+        return None
 
 
 def collect(include_battery: bool) -> tuple[Optional[dict], Optional[dict]]:
@@ -148,9 +162,12 @@ def flush(server: str, token: str, buffer_path: str, session=None) -> int:
     return sent
 
 
-def run_once(server: str, token: str, buffer_path: str, include_battery: bool, session=None) -> int:
+def run_once(
+    server: str, token: str, buffer_path: str, include_battery: bool, session=None, include_storage: bool = False
+) -> int:
     battery, system = collect(include_battery)
-    samples = build_payload(battery, system)
+    storage = collect_storage() if include_storage else None
+    samples = build_payload(battery, system, storage=storage)
     buffer_append(buffer_path, samples)
     return flush(server, token, buffer_path, session=session)
 
@@ -214,6 +231,9 @@ def main(argv: list[str]) -> int:
     parser.add_argument(
         "--battery-every", type=int, default=3600, help="seconds between battery capacity reads"
     )
+    parser.add_argument(
+        "--storage-every", type=int, default=900, help="seconds between timed disk probes (8 MB write+read)"
+    )
     parser.add_argument("--buffer", default=DEFAULT_BUFFER)
     parser.add_argument("--once", action="store_true", help="collect and upload once, then exit")
     args = parser.parse_args(argv)
@@ -224,16 +244,22 @@ def main(argv: list[str]) -> int:
 
     print(f"[agent] uploading to {args.server} every {args.interval}s. Ctrl+C to stop.")
     last_battery = 0.0
+    last_storage = float("-inf")
     last_upload = float("-inf")
     try:
         while True:
             tick = time.monotonic()
             if tick - last_upload >= args.interval:
                 due = (tick - last_battery) >= args.battery_every or last_battery == 0.0
-                sent = run_once(args.server, args.token, args.buffer, include_battery=due)
+                storage_due = (tick - last_storage) >= args.storage_every
+                sent = run_once(
+                    args.server, args.token, args.buffer, include_battery=due, include_storage=storage_due
+                )
                 last_upload = time.monotonic()
                 if due:
                     last_battery = last_upload
+                if storage_due:
+                    last_storage = last_upload
                 print(f"[agent] {now_iso()} sent {sent} sample(s); buffered {len(buffer_read(args.buffer))}")
             if args.once:
                 return 0
