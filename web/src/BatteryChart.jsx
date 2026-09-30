@@ -26,7 +26,7 @@ export function BatteryChart({ history, battery }) {
 
   const values = rows.flatMap((r) => [r.health, ...(r.band ?? [])]).filter((v) => typeof v === 'number');
   const yMin = Math.floor(Math.min(battery.thresholdPct, ...values) / 5) * 5 - 5;
-  const yMax = Math.min(100, Math.ceil(Math.max(...values) / 5) * 5 + 2);
+  const yMax = Math.min(100, Math.ceil(Math.max(...values) / 5) * 5 + 5);
 
   return (
     <div className="h-72 w-full" role="img" aria-label={`Battery health history${f ? ' with forecast range' : ''}`}>
@@ -34,7 +34,7 @@ export function BatteryChart({ history, battery }) {
         <ComposedChart data={rows} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
           <CartesianGrid stroke="#eceae2" vertical={false} />
           <XAxis dataKey="t" type="number" scale="time" domain={['dataMin', 'dataMax']} tickFormatter={fmtMonth} tick={{ fontSize: 12, fill: '#4a5056' }} />
-          <YAxis domain={[yMin, yMax]} tickFormatter={(v) => `${v}%`} width={48} tick={{ fontSize: 12, fill: '#4a5056' }} />
+          <YAxis domain={[yMin, yMax]} allowDecimals={false} tickCount={6} tickFormatter={(v) => `${Math.round(v)}%`} width={48} tick={{ fontSize: 12, fill: '#4a5056' }} />
           <Tooltip
             labelFormatter={(t) => new Date(t).toLocaleDateString()}
             formatter={(v, name) => (Array.isArray(v) ? [`${v[0].toFixed(1)}% to ${v[1].toFixed(1)}%`, 'Forecast range'] : [`${v}%`, 'Health'])}

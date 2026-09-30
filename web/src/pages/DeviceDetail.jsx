@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { api, errorText } from '../api.js';
 import { BatteryChart } from '../BatteryChart.jsx';
-import { Alert, Card, DataLabel, Severity, Spinner, Stat, Status, timeAgo } from '../ui.jsx';
+import { Alert, Card, DataLabel, Live, Severity, Spinner, Stat, Status, timeAgo } from '../ui.jsx';
 
 const fmtRange = (f) => {
   if (f.monthsHigh === null) return `at least ${f.monthsLow} months`;
@@ -115,6 +115,7 @@ export default function DeviceDetail() {
             {worst ? <Severity level={worst} /> : <Severity level="Normal">No findings</Severity>}
           </div>
           <div className="text-muted">
+            {!device.isSimulated && <Live iso={device.lastSeen} />}
             {[device.model, device.bios && `BIOS ${device.bios}`, device.os].filter(Boolean).join(' · ') || 'Model not reported'} · last seen{' '}
             {timeAgo(device.lastSeen)}
           </div>
@@ -122,13 +123,13 @@ export default function DeviceDetail() {
         {device.isSimulated ? (
           <span className="text-sm text-muted">Diagnose needs a real agent</span>
         ) : (
-          <Link to={`/devices/${device.id}/diagnose`} className="inline-flex min-h-11 items-center rounded-lg bg-brand px-5 font-semibold text-white no-underline hover:bg-brand-dark hover:text-white">
+          <Link to={`/devices/${device.id}/diagnose`} className="press inline-flex min-h-11 items-center rounded-lg bg-brand px-5 font-semibold text-white no-underline hover:bg-brand-dark hover:text-white">
             Why is it slow? Diagnose
           </Link>
         )}
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className="stagger grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card title="Battery" right={battery.status === 'collecting' ? <Status>Collecting data</Status> : battery.forecast ? <Status>Trend available</Status> : <Severity level="Normal">Stable</Severity>}>
           <Stat label="Health (of original capacity)" value={battery.healthPct} unit="%" hint="No battery reading yet" />
           {latest.battery && (

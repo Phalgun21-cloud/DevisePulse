@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { api, setToken, errorText } from '../api.js';
 import { Alert, Button } from '../ui.jsx';
+import { Aurora, CursorFX } from '../fx.jsx';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -30,14 +31,19 @@ export default function Login() {
   const input = 'min-h-11 w-full rounded-lg border border-line bg-panel px-3 text-[15px]';
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
-      <div className="flex w-full max-w-md flex-col gap-6">
-        <div className="flex flex-col gap-2">
-          <div className="text-2xl font-bold tracking-tight">DevicePulse</div>
-          <p className="m-0 text-muted">
-            Early warnings for ageing laptops, with the evidence behind every finding. Built for schools, clinics and small offices.
+      <Aurora />
+      <CursorFX />
+      <div className="stagger flex w-full max-w-md flex-col gap-6">
+        <div className="flex flex-col gap-3">
+          <div className="inline-flex w-fit items-center gap-2 rounded-full border border-line bg-panel/70 px-3 py-1 text-xs font-semibold text-brand">
+            <span className="live-dot" /> Predictive health for ageing laptops
+          </div>
+          <div className="bg-gradient-to-r from-ink via-brand to-sim bg-clip-text text-5xl font-bold tracking-tight text-transparent">DevicePulse</div>
+          <p className="m-0 text-lg text-muted">
+            Early warnings with the evidence behind every finding. Built for schools, clinics and small offices.
           </p>
         </div>
-        <form onSubmit={submit} className="flex flex-col gap-4 rounded-xl border border-line bg-panel p-6">
+        <form onSubmit={submit} className="glass spot flex flex-col gap-4 rounded-2xl border border-white/70 p-7 shadow-[0_30px_60px_-30px_rgba(11,60,58,0.45)]">
           <h1 className="m-0 text-xl font-semibold">{mode === 'login' ? 'Sign in' : 'Create an account'}</h1>
           {error && <Alert>{error}</Alert>}
           <label className="flex flex-col gap-1.5 text-sm font-medium">

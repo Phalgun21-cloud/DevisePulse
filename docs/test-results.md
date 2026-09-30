@@ -204,6 +204,26 @@ which would not have tripped even a naive detector; it was made busier all day s
 "Test Files 4 passed (5), Tests 97 passed (125)" and an unhandled-error warning. The output was cut off before the error
 itself, so the cause is unknown. Six immediate reruns of the full server suite all gave 125 passed (125). Not fixed; watch for it.
 
+## Task 6: web dashboard, 2026-09-30
+
+React 19 + Vite 8 + React Router 8 + Tailwind 4 + Recharts 3 + Axios, served by the API from `web/dist` (one process).
+New API: device summary (`GET /api/devices/:id`, forecasts as month ranges only, no dates), diagnose history,
+`POST /api/demo/seed` (simulated devices replayed through the real detectors and lifecycle), `GET /api/fleet/demo`
+(synthetic 200 laptops, planted Model A / BIOS 1.4.2 battery problem, groups under 10 hidden).
+Tests: **server 135 passed (135)** (10 new in `dashboard.test.js`, written first; 8 failed before the code),
+**agent 80 passed**. `npm run build` succeeds (bundle-size warning only).
+
+**Verified by hand in the built-in browser against the real server on this laptop (NOT an automated browser test):**
+registered and signed in through the form; loaded the demo devices (4 simulated, 3 at Attention, all labelled
+SIMULATED); added a real device in the UI, ran the exact agent command the page showed, and the device page showed
+live readings (battery 55.4% "collecting 1 of 5 days", CPU, speed 0.58x, probe 18.9 ms, free 10.2%, SMART and
+temperature "Not available on this device"); ran Diagnose from the UI with the live agent: pending -> sampling -> done,
+"No clear cause" (idle laptop), grouped processes, disk 0.1% / 0.29 ms; LAB-07 showed the forecast band and
+"roughly 3.6 to 8.4 months (confidence: Moderate)". No console errors.
+Bugs found this way and fixed: header links and the white-on-teal Diagnose button were unreadable (unlayered CSS
+overrode Tailwind utilities); chart axis showed "100.1%".
+Animations, cursor effects and transitions are CSS/JS only and switch off under prefers-reduced-motion.
+
 ## Also verified by hand
 - Real server + real agent, one upload: sample stored, missing CPU temperature kept as null (not zero).
 - Wrong device token: server answers 401, agent keeps the sample buffered.
@@ -217,7 +237,7 @@ itself, so the cause is unknown. Six immediate reruns of the full server suite a
 - Storage Tier B over days on a real laptop: the 3-day baseline, the 24 h median and a real slow-disk finding have only run on simulated data.
 - Thermal on real hardware: no temperature exists on the first laptop; the frequency fallback has never fired on a real device.
 - The unhandled-error flake seen once in the full server suite (see Task 4).
-- Real-device fault injection (chaos/), 48-hour soak, web dashboard, end-to-end browser test.
+- 48-hour soak; an AUTOMATED end-to-end browser test (the dashboard was only checked by hand); Postgres (task 7); deployment (task 10).
 - Scenario accuracy over 200 healthy simulated devices (only the battery scenarios exist so far).
 
 ## Design decision recorded

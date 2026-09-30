@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { api, apiOrigin, errorText } from '../api.js';
-import { Alert, Button, DataLabel, Severity, Spinner, Status, timeAgo } from '../ui.jsx';
+import { Alert, Button, DataLabel, Live, Severity, Spinner, Status, timeAgo } from '../ui.jsx';
+import { CountUp } from '../fx.jsx';
 
 function AddDevice({ onDone }) {
   const [name, setName] = useState('');
@@ -110,7 +111,7 @@ export default function Devices() {
     <>
       <div className="flex flex-wrap items-end gap-4">
         <div className="flex flex-grow flex-col gap-1.5">
-          <h1 className="m-0 text-3xl font-semibold tracking-tight">Devices</h1>
+          <h1 className="m-0 bg-gradient-to-r from-ink to-brand bg-clip-text text-4xl font-semibold tracking-tight text-transparent">Devices</h1>
           <p className="m-0 text-muted">Elevated-risk findings with evidence. A finding appears only after two checks agree.</p>
         </div>
         {!hasDemo && (
@@ -135,16 +136,18 @@ export default function Devices() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+          <div className="stagger grid grid-cols-2 gap-4 md:grid-cols-4">
             {[
               ['Devices', devices.length, `${count((d) => !d.isSimulated)} real, ${count((d) => d.isSimulated)} simulated`],
               ['Urgent', count((d) => d.worstSeverity === 'Urgent'), 'back up now'],
               ['Attention', count((d) => d.worstSeverity === 'Attention'), 'plan action'],
               ['Watch', count((d) => d.worstSeverity === 'Watch'), 'keep an eye on'],
             ].map(([label, n, hint]) => (
-              <div key={label} className="flex flex-col gap-1 rounded-xl border border-line bg-panel p-5">
+              <div key={label} className="spot flex flex-col gap-1 rounded-xl border border-line bg-panel/90 p-5 backdrop-blur-sm">
                 <div className="text-[13px] text-muted">{label}</div>
-                <div className="font-mono text-3xl font-semibold">{n}</div>
+                <div className="font-mono text-4xl font-semibold">
+                  <CountUp value={n} />
+                </div>
                 <div className="text-[13px] text-muted">{hint}</div>
               </div>
             ))}
@@ -163,8 +166,9 @@ export default function Devices() {
               </thead>
               <tbody>
                 {devices.map((d) => (
-                  <tr key={d.id} className="border-t border-soft">
+                  <tr key={d.id} className="border-t border-soft transition-colors hover:bg-brand-soft/60">
                     <td className="px-6 py-4">
+                      {!d.isSimulated && <Live iso={d.lastSeen} />}
                       <Link to={`/devices/${d.id}`} className="font-semibold">
                         {d.name}
                       </Link>

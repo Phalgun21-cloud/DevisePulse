@@ -24,6 +24,26 @@ See `docs/test-results.md` for what has and has not been verified.
 - Python 3.10 or newer
 - Optional: smartmontools (`smartctl`) for SMART storage data, needs Administrator rights
 
+## Run the full app (one command after setup)
+
+```powershell
+npm run install:all      # server + web dependencies
+npm run build            # builds the React dashboard into web/dist
+npm start                # API + dashboard on http://localhost:4000 (needs server\.env with JWT_SECRET)
+```
+
+Open http://localhost:4000, create an account, then either **Add device** (it shows the one-time agent command to
+run on the laptop) or **Load demo devices (simulated)**. For UI development with hot reload run `npm run dev:server`
+and `npm run dev:web` (http://localhost:5173, which proxies `/api` to :4000).
+
+### Deploy (one web service)
+
+The API serves the built dashboard, so one service is enough (Render, Railway or Fly.io):
+build command `npm run install:all && npm run build`, start command `npm start`, environment `JWT_SECRET`
+(long random string) and optionally `DATABASE_FILE`. **Known limit:** the database is SQLite. On free hosts the
+file system is wiped on restart, so accounts and readings are lost unless a persistent disk is attached. Postgres
+support (task 7) is not built yet.
+
 ## Setup (Windows PowerShell)
 
 ```powershell

@@ -33,7 +33,7 @@ export function DataLabel({ simulated }) {
 
 export function Card({ title, right, children, className = '' }) {
   return (
-    <section className={`flex flex-col gap-3 rounded-xl border border-line bg-panel p-6 ${className}`}>
+    <section className={`spot flex flex-col gap-3 rounded-xl border border-line bg-panel/90 p-6 backdrop-blur-sm ${className}`}>
       {(title || right) && (
         <div className="flex items-center gap-2">
           {title && <h2 className="m-0 flex-grow text-[17px] font-semibold">{title}</h2>}
@@ -69,7 +69,7 @@ export function Button({ children, variant = 'primary', className = '', ...props
     ghost: 'text-brand hover:bg-brand-soft',
   };
   return (
-    <button className={`min-h-11 rounded-lg px-5 text-[15px] font-semibold transition-colors ${styles[variant]} ${className}`} {...props}>
+    <button className={`press min-h-11 rounded-lg px-5 text-[15px] font-semibold ${styles[variant]} ${className}`} {...props}>
       {children}
     </button>
   );
@@ -82,6 +82,12 @@ export function Alert({ children, tone = 'error' }) {
       {children}
     </div>
   );
+}
+
+// A pulsing dot when a real device reported in the last few minutes.
+export function Live({ iso }) {
+  const fresh = iso && Date.now() - Date.parse(iso) < 5 * 60_000;
+  return fresh ? <span className="live-dot mr-2 align-middle" title="Reporting now" /> : null;
 }
 
 export function timeAgo(iso) {
