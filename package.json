@@ -1,0 +1,14 @@
+{
+  "name": "devicepulse",
+  "private": true,
+  "version": "0.1.0",
+  "description": "DevicePulse: predictive laptop health monitoring (agent + API + dashboard)",
+  "scripts": {
+    "install:all": "npm --prefix server install",
+    "test:server": "npm --prefix server test",
+    "test:agent": "python -m pytest agent -q",
+    "test": "npm run test:server && npm run test:agent",
+    "dev:server": "npm --prefix server run dev",
+    "probe": "python agent/probe.py"
+  }
+}

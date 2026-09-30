@@ -1,0 +1,11 @@
+node_modules/
+.env
+*.db
+*.sqlite
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+dist/
+agent/buffer.jsonl
+agent/config.json
