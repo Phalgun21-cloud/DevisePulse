@@ -6,6 +6,8 @@ import { Layout } from './Layout.jsx';
 import { getToken } from './api.js';
 import Login from './pages/Login.jsx';
 import Devices from './pages/Devices.jsx';
+import Dashboard from './pages/Dashboard.jsx';
+import Monitoring from './pages/Monitoring.jsx';
 import DeviceDetail from './pages/DeviceDetail.jsx';
 import Diagnose from './pages/Diagnose.jsx';
 import Fleet from './pages/Fleet.jsx';
@@ -26,7 +28,9 @@ createRoot(document.getElementById('root')).render(
             </RequireAuth>
           }
         >
-          <Route path="/" element={<Devices />} />
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/devices" element={<Devices />} />
+          <Route path="/monitoring" element={<Monitoring />} />
           <Route path="/devices/:id" element={<DeviceDetail />} />
           <Route path="/devices/:id/diagnose" element={<Diagnose />} />
           <Route path="/fleet" element={<Fleet />} />

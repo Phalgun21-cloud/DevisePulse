@@ -31,7 +31,7 @@ function AddDevice({ onDone }) {
           This token is shown <strong>only once</strong>. DevicePulse stores just a hash of it. Run from the DevicePulse folder
           after <code className="font-mono">pip install -r agent\requirements.txt</code>.
         </p>
-        <pre className="m-0 overflow-x-auto rounded-lg bg-ink p-4 font-mono text-sm text-ground">{command}</pre>
+        <pre className="m-0 overflow-x-auto rounded-lg bg-[#05080b] p-4 font-mono text-sm text-ink border border-line">{command}</pre>
         <div className="flex flex-wrap gap-3">
           <Button
             onClick={async () => {
@@ -128,7 +128,7 @@ export default function Devices() {
       {devices === null ? (
         <Spinner label="Loading devices" />
       ) : devices.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 rounded-xl border-[1.5px] border-dashed border-[#c9c6ba] p-10 text-center">
+        <div className="flex flex-col items-center gap-2 rounded-xl border-[1.5px] border-dashed border-[#334155] p-10 text-center">
           <div className="text-lg font-semibold">No devices yet</div>
           <p className="m-0 max-w-xl text-muted">
             Add a laptop and run the agent on it, or load the simulated demo devices to see what findings look like.
@@ -193,7 +193,7 @@ export default function Devices() {
         </>
       )}
 
-      <div className="flex items-center gap-3 rounded-xl bg-brand-soft px-5 py-4 text-sm text-[#0b3f3c]">
+      <div className="flex items-center gap-3 rounded-xl bg-brand-soft px-5 py-4 text-sm text-[#99f6e4]">
         DevicePulse reports elevated risk with a confidence label. It never predicts an exact failure date.
       </div>
     </>

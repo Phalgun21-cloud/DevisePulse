@@ -11,3 +11,4 @@ __pycache__/
 dist/
 agent/buffer.jsonl
 agent/config.json
+*.local.sql

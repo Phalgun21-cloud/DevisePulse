@@ -14,7 +14,7 @@ function Toasts({ items }) {
         <div
           key={t.id}
           className={`toast-in pointer-events-auto flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium shadow-[0_18px_40px_-18px_rgba(0,0,0,0.5)] ${
-            t.tone === 'error' ? 'bg-[#8a1c12] text-white' : 'bg-ink text-ground'
+            t.tone === 'error' ? 'bg-[#8a1c12] text-white' : 'bg-[#1a2330] text-ink border border-line'
           }`}
         >
           <span aria-hidden="true" className={`h-2 w-2 rounded-full ${t.tone === 'error' ? 'bg-[#ffb4a8]' : 'bg-[#7fd1cb]'}`} />
@@ -71,14 +71,22 @@ export function Layout() {
         <CursorFX />
 
         {/* Sidebar on large screens, top bar on small ones */}
-        <aside className="brand-bar z-40 flex items-center gap-4 px-4 py-3 text-ground lg:fixed lg:inset-y-0 lg:left-0 lg:w-64 lg:flex-col lg:items-stretch lg:gap-8 lg:px-4 lg:py-7">
+        <aside className="brand-bar z-40 flex items-center gap-4 px-4 py-3 text-ink lg:fixed lg:inset-y-0 lg:left-0 lg:w-64 lg:flex-col lg:items-stretch lg:gap-8 lg:px-4 lg:py-7">
           <NavLink to="/" className="wordmark px-3 text-2xl font-bold tracking-tight no-underline">
             DevicePulse
           </NavLink>
           <nav aria-label="Main" className="flex flex-grow gap-1 lg:flex-col">
             <NavLink to="/" end className={link}>
+              {icons.fleet}
+              <span className="hidden sm:inline">Dashboard</span>
+            </NavLink>
+            <NavLink to="/devices" className={link}>
               {icons.devices}
               <span className="hidden sm:inline">Devices</span>
+            </NavLink>
+            <NavLink to="/monitoring" className={link}>
+              {icons.db}
+              <span className="hidden sm:inline">How it works</span>
             </NavLink>
             <NavLink to="/fleet" className={link}>
               {icons.fleet}
@@ -94,7 +102,7 @@ export function Layout() {
               Database: <span className="font-semibold uppercase tracking-wide text-[#7fd1cb]">{me?.database ?? '…'}</span>
             </div>
           </div>
-          <button onClick={signOut} className="press flex min-h-11 items-center gap-2 rounded-xl border border-white/15 px-3 text-sm text-ground hover:bg-white/8">
+          <button onClick={signOut} className="press flex min-h-11 items-center gap-2 rounded-xl border border-white/15 px-3 text-sm text-ink hover:bg-white/8">
             {icons.out}
             <span className="hidden sm:inline">Sign out</span>
           </button>

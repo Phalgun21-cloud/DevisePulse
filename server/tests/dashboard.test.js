@@ -174,3 +174,52 @@ describe('fleet demo', () => {
     await request(app).get('/api/fleet/demo').expect(401);
   });
 });
+
+describe('all-devices overview', () => {
+  it('summarises every device of the user with latest readings, counts, coverage and findings', async () => {
+    const { app } = makeApp();
+    const jwt = await signup(app);
+    const real = (await request(app).post('/api/devices').set(auth(jwt)).send({ name: 'real one' })).body;
+    await request(app)
+      .post('/api/ingest')
+      .set('Authorization', `Bearer ${real.deviceToken}`)
+      .send({
+        samples: [
+          { ts: '2026-07-04T10:00:00Z', kind: 'cpu', values: { cpuLoadPct: 18, memUsedPct: 70, cpuTempC: null, cpuFreqRatio: 1.2 } },
+          { ts: '2026-07-04T10:01:00Z', kind: 'cpu', values: { cpuLoadPct: 22, memUsedPct: 71, cpuTempC: null, cpuFreqRatio: 1.1 } },
+          { ts: '2026-07-04T10:00:00Z', kind: 'storage', values: { ioProbeMs: 20, freeSpacePct: 4, percentageUsed: null } },
+        ],
+      })
+      .expect(200);
+    // A second upload = a second storage check, so the free-space finding is confirmed (2 detections).
+    await request(app)
+      .post('/api/ingest')
+      .set('Authorization', `Bearer ${real.deviceToken}`)
+      .send({ samples: [{ ts: '2026-07-04T10:15:00Z', kind: 'storage', values: { ioProbeMs: 21, freeSpacePct: 4, percentageUsed: null } }] })
+      .expect(200);
+    await request(app).post('/api/demo/seed').set(auth(jwt)).expect(201);
+    const other = await signup(app, 'other@example.com');
+    await request(app).post('/api/devices').set(auth(other)).send({ name: 'not mine' });
+
+    const res = await request(app).get('/api/overview').set(auth(jwt)).expect(200);
+    expect(res.body.totals).toMatchObject({ devices: 5, real: 1, simulated: 4 });
+    expect(res.body.devices.map((d) => d.name)).not.toContain('not mine');
+    const r = res.body.devices.find((d) => d.name === 'real one');
+    expect(r.readings).toMatchObject({ cpu: 2, storage: 2, battery: 0 });
+    expect(r.latest.cpu).toMatchObject({ cpuLoadPct: 22, memUsedPct: 71 });
+    expect(r.latest.storage).toMatchObject({ ioProbeMs: 21, freeSpacePct: 4 });
+    expect(r.coverage).toMatchObject({ cpu: true, memory: true, cpuSpeed: true, temperature: false, battery: false, diskTest: true, smart: false });
+    expect(r.findings.map((f) => f.rule)).toContain('storage_free_space');
+    expect(res.body.totals.bySeverity.Attention).toBeGreaterThanOrEqual(3);
+    expect(res.body.findings.length).toBe(res.body.totals.activeFindings);
+  }, 60_000);
+
+  it('monitoring rules come from the live settings', async () => {
+    const { app } = makeApp();
+    const jwt = await signup(app);
+    const res = await request(app).get('/api/monitoring').set(auth(jwt)).expect(200);
+    expect(res.body.settings.storage.slowRatio).toBe(3);
+    expect(res.body.settings.findings).toEqual({ confirmDetections: 2, clearAfterNormal: 3 });
+    expect(res.body.cadence.cpuSeconds).toBe(60);
+  });
+});

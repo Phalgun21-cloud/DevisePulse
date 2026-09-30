@@ -2,32 +2,32 @@
 
 const severityStyle = {
   Urgent: 'bg-[#b42318] text-white',
-  Attention: 'bg-[#ffe4d6] text-[#9a3412]',
-  Watch: 'bg-[#fff1cc] text-[#7a5200]',
-  Information: 'bg-[#e3ecf7] text-[#1d4e89]',
-  Normal: 'bg-[#e3f1e7] text-[#1f5f3a]',
+  Attention: 'bg-[#3b1d0f] text-[#fb923c]',
+  Watch: 'bg-[#3a2e0a] text-[#fcd34d]',
+  Information: 'bg-[#0f2540] text-[#60a5fa]',
+  Normal: 'bg-[#0f2e1c] text-[#86efac]',
 };
 
 export function Severity({ level, children }) {
   return (
-    <span className={`inline-block rounded-md px-2.5 py-1 text-[13px] font-semibold ${severityStyle[level] ?? 'bg-soft text-[#33383d]'}`}>
+    <span className={`inline-block rounded-md px-2.5 py-1 text-[13px] font-semibold ${severityStyle[level] ?? 'bg-soft text-[#c3ccd6]'}`}>
       {children ?? level}
     </span>
   );
 }
 
 export function Status({ children }) {
-  return <span className="inline-block rounded-md bg-soft px-2.5 py-1 text-[13px] font-semibold text-[#33383d]">{children}</span>;
+  return <span className="inline-block rounded-md bg-soft px-2.5 py-1 text-[13px] font-semibold text-[#c3ccd6]">{children}</span>;
 }
 
 // Rule 5: every screen marks data Real (measured) or Simulated.
 export function DataLabel({ simulated }) {
   return simulated ? (
-    <span className="inline-block rounded-full border-[1.5px] border-dashed border-[#5b3fa0] px-2.5 py-0.5 text-xs font-semibold tracking-wide text-sim">
+    <span className="inline-block rounded-full border-[1.5px] border-dashed border-[#8b7cf6] px-2.5 py-0.5 text-xs font-semibold tracking-wide text-sim">
       SIMULATED
     </span>
   ) : (
-    <span className="inline-block rounded-full bg-ink px-2.5 py-0.5 text-xs font-semibold tracking-wide text-white">REAL · measured</span>
+    <span className="inline-block rounded-full bg-[#e6edf3] px-2.5 py-0.5 text-xs font-semibold tracking-wide text-[#0a0e13]">REAL · measured</span>
   );
 }
 
@@ -64,7 +64,7 @@ export function Stat({ label, value, unit, hint }) {
 
 export function Button({ children, variant = 'primary', className = '', ...props }) {
   const styles = {
-    primary: 'bg-brand text-white hover:bg-brand-dark disabled:opacity-50',
+    primary: 'bg-brand text-[#04201d] hover:bg-brand-dark disabled:opacity-50',
     secondary: 'border border-line bg-panel text-ink hover:bg-soft disabled:opacity-50',
     ghost: 'text-brand hover:bg-brand-soft',
   };
@@ -76,7 +76,7 @@ export function Button({ children, variant = 'primary', className = '', ...props
 }
 
 export function Alert({ children, tone = 'error' }) {
-  const styles = tone === 'error' ? 'bg-[#fdecea] text-[#8a1c12]' : 'bg-brand-soft text-[#0b3f3c]';
+  const styles = tone === 'error' ? 'bg-[#3a1411] text-[#fca5a5]' : 'bg-brand-soft text-[#99f6e4]';
   return (
     <div role={tone === 'error' ? 'alert' : 'status'} className={`rounded-lg px-4 py-3 text-sm ${styles}`}>
       {children}

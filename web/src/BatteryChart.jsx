@@ -32,17 +32,17 @@ export function BatteryChart({ history, battery }) {
     <div className="h-72 w-full" role="img" aria-label={`Battery health history${f ? ' with forecast range' : ''}`}>
       <ResponsiveContainer>
         <ComposedChart data={rows} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
-          <CartesianGrid stroke="#eceae2" vertical={false} />
-          <XAxis dataKey="t" type="number" scale="time" domain={['dataMin', 'dataMax']} tickFormatter={fmtMonth} tick={{ fontSize: 12, fill: '#4a5056' }} />
-          <YAxis domain={[yMin, yMax]} allowDecimals={false} tickCount={6} tickFormatter={(v) => `${Math.round(v)}%`} width={48} tick={{ fontSize: 12, fill: '#4a5056' }} />
+          <CartesianGrid stroke="#1f2833" vertical={false} />
+          <XAxis dataKey="t" type="number" scale="time" domain={['dataMin', 'dataMax']} tickFormatter={fmtMonth} tick={{ fontSize: 12, fill: '#8b98a5' }} />
+          <YAxis domain={[yMin, yMax]} allowDecimals={false} tickCount={6} tickFormatter={(v) => `${Math.round(v)}%`} width={48} tick={{ fontSize: 12, fill: '#8b98a5' }} />
           <Tooltip
             labelFormatter={(t) => new Date(t).toLocaleDateString()}
             formatter={(v, name) => (Array.isArray(v) ? [`${v[0].toFixed(1)}% to ${v[1].toFixed(1)}%`, 'Forecast range'] : [`${v}%`, 'Health'])}
           />
-          <ReferenceLine y={battery.watchBelowPct} stroke="#b98a1e" strokeDasharray="4 4" label={{ value: `Watch below ${battery.watchBelowPct}%`, position: 'insideTopRight', fill: '#7a5200', fontSize: 12 }} />
-          <ReferenceLine y={battery.thresholdPct} stroke="#9a3412" strokeDasharray="6 4" label={{ value: `Replacement threshold ${battery.thresholdPct}%`, position: 'insideBottomRight', fill: '#9a3412', fontSize: 12 }} />
-          <Area dataKey="band" stroke="none" fill="#f5c8ae" fillOpacity={0.8} isAnimationActive={false} connectNulls />
-          <Line dataKey="health" stroke="#0b5e5a" strokeWidth={2.5} dot={false} isAnimationActive={false} connectNulls />
+          <ReferenceLine y={battery.watchBelowPct} stroke="#eab308" strokeDasharray="4 4" label={{ value: `Watch below ${battery.watchBelowPct}%`, position: 'insideTopRight', fill: '#fcd34d', fontSize: 12 }} />
+          <ReferenceLine y={battery.thresholdPct} stroke="#fb923c" strokeDasharray="6 4" label={{ value: `Replacement threshold ${battery.thresholdPct}%`, position: 'insideBottomRight', fill: '#fb923c', fontSize: 12 }} />
+          <Area dataKey="band" stroke="none" fill="#f97316" fillOpacity={0.8} isAnimationActive={false} connectNulls />
+          <Line dataKey="health" stroke="#2dd4bf" strokeWidth={2.5} dot={false} isAnimationActive={false} connectNulls />
         </ComposedChart>
       </ResponsiveContainer>
     </div>

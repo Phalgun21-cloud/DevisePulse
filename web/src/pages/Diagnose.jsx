@@ -25,7 +25,7 @@ function Result({ req }) {
         result.causes.map((c, i) => (
           <Card key={c.rule}>
             <div className="flex items-start gap-5">
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-ink font-mono text-2xl font-bold text-white">{c.rank}</div>
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-brand font-mono text-2xl font-bold text-[#04201d]">{c.rank}</div>
               <div className="flex flex-col gap-2">
                 <div className="text-xl font-semibold">
                   {ruleTitle[c.rule] ?? c.rule}

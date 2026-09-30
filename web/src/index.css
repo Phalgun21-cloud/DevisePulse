@@ -3,17 +3,22 @@
 @theme {
   --font-sans: "IBM Plex Sans", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
-  --color-ground: #f4f3ee;
-  --color-panel: #ffffff;
-  --color-line: #dedcd3;
-  --color-soft: #eceae2;
-  --color-ink: #1b1d1f;
-  --color-muted: #4a5056;
-  --color-brand: #0b5e5a;
-  --color-brand-dark: #073f3c;
-  --color-brand-soft: #e4f1ef;
-  --color-sim: #4b2f8f;
-  --color-sim-soft: #eee8fa;
+  /* Dark theme. "ink" is the main TEXT colour; surfaces are ground < panel < soft. */
+  --color-ground: #0a0e13;
+  --color-panel: #111821;
+  --color-line: #1f2a36;
+  --color-soft: #18212c;
+  --color-ink: #e6edf3;
+  --color-muted: #8b98a5;
+  --color-brand: #2dd4bf;
+  --color-brand-dark: #5eead4;
+  --color-brand-soft: #0f2a2a;
+  --color-sim: #b4a3ff;
+  --color-sim-soft: #1c1633;
+}
+
+:root {
+  color-scheme: dark; /* native date pickers, selects and scrollbars follow the theme */
 }
 
 /* In the base layer so utility classes (text-white on a link-styled button, header links) win over these defaults.
@@ -87,19 +92,19 @@
   z-index: -1;
   opacity: 0;
   transition: opacity 0.3s ease;
-  background: radial-gradient(420px circle at var(--mx, 50%) var(--my, 50%), rgba(11, 94, 90, 0.13), transparent 45%);
+  background: radial-gradient(420px circle at var(--mx, 50%) var(--my, 50%), rgba(45, 212, 191, 0.10), transparent 45%);
   pointer-events: none;
 }
 .spot:hover::before { opacity: 1; }
 .spot:hover {
   transform: translateY(-3px);
-  border-color: #b9d8d4;
-  box-shadow: 0 18px 40px -22px rgba(11, 60, 58, 0.45);
+  border-color: rgba(45, 212, 191, 0.35);
+  box-shadow: 0 22px 50px -24px rgba(45, 212, 191, 0.25), 0 0 0 1px rgba(45, 212, 191, 0.08);
 }
 
 /* Animated brand header and aurora backdrop. */
 .brand-bar {
-  background: linear-gradient(100deg, #141618 0%, #13302e 35%, #141618 60%, #221a3b 85%, #141618 100%);
+  background: linear-gradient(100deg, #070a0e 0%, #0c2524 35%, #070a0e 60%, #1a1433 85%, #070a0e 100%); border-right: 1px solid #1f2a36;
   background-size: 200% 100%;
   animation: sheen 18s linear infinite;
 }
@@ -118,19 +123,19 @@
   height: 46vmax;
   border-radius: 50%;
   filter: blur(80px);
-  opacity: 0.35;
+  opacity: 0.16;
   animation: aurora 22s ease-in-out infinite;
 }
-.aurora span:nth-child(1) { background: #7fd1cb; top: -18vmax; left: -12vmax; }
-.aurora span:nth-child(2) { background: #c7b8ff; bottom: -22vmax; right: -14vmax; animation-delay: -7s; }
-.aurora span:nth-child(3) { background: #ffd8b8; top: 30%; left: 45%; width: 30vmax; height: 30vmax; opacity: 0.25; animation-delay: -14s; }
+.aurora span:nth-child(1) { background: #0d9488; top: -18vmax; left: -12vmax; }
+.aurora span:nth-child(2) { background: #6d28d9; bottom: -22vmax; right: -14vmax; animation-delay: -7s; }
+.aurora span:nth-child(3) { background: #0e7490; top: 30%; left: 45%; width: 30vmax; height: 30vmax; opacity: 0.25; animation-delay: -14s; }
 
-.glass { background: rgba(255, 255, 255, 0.72); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+.glass { background: rgba(17, 24, 33, 0.72); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
 
 .live-dot { width: 8px; height: 8px; border-radius: 50%; background: #16a37a; animation: pulse-ring 1.6s ease-out infinite; display: inline-block; }
 
 .press { transition: transform 0.12s ease, background-color 0.2s ease, box-shadow 0.2s ease; }
-.press:hover { box-shadow: 0 8px 22px -10px rgba(11, 94, 90, 0.6); }
+.press:hover { box-shadow: 0 8px 22px -10px rgba(45, 212, 191, 0.45); }
 .press:active { transform: scale(0.97); }
 
 /* Custom cursor (fine pointers only; the real cursor stays visible for accessibility). */
@@ -138,15 +143,15 @@
   position: fixed; top: 0; left: 0; pointer-events: none; z-index: 60; border-radius: 50%;
   transform: translate3d(-100px, -100px, 0);
 }
-.cursor-dot { width: 8px; height: 8px; margin: -4px 0 0 -4px; background: #0b5e5a; }
+.cursor-dot { width: 8px; height: 8px; margin: -4px 0 0 -4px; background: #2dd4bf; box-shadow: 0 0 12px #2dd4bf; }
 .cursor-ring {
   width: 36px; height: 36px; margin: -18px 0 0 -18px;
-  border: 1.5px solid rgba(11, 94, 90, 0.5);
+  border: 1.5px solid rgba(45, 212, 191, 0.45);
   transition: width 0.2s ease, height 0.2s ease, margin 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
 }
 .cursor-ring.hot {
   width: 56px; height: 56px; margin: -28px 0 0 -28px;
-  background: rgba(127, 209, 203, 0.18); border-color: rgba(11, 94, 90, 0.8);
+  background: rgba(45, 212, 191, 0.12); border-color: rgba(94, 234, 212, 0.9);
 }
 @media (pointer: coarse) { .cursor-dot, .cursor-ring { display: none; } }
 
@@ -161,6 +166,15 @@
 }
 .toast-in { animation: toast-in 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
 
-dialog.dp-dialog { border: 0; padding: 0; border-radius: 1rem; max-width: 28rem; width: calc(100% - 2rem); box-shadow: 0 40px 80px -30px rgba(0, 0, 0, 0.5); }
+dialog.dp-dialog { border: 1px solid #1f2a36; color: var(--color-ink); padding: 0; border-radius: 1rem; max-width: 28rem; width: calc(100% - 2rem); box-shadow: 0 40px 80px -30px rgba(0, 0, 0, 0.8); }
 dialog.dp-dialog[open] { animation: fade-up 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
-dialog.dp-dialog::backdrop { background: rgba(20, 22, 24, 0.45); backdrop-filter: blur(4px); }
+dialog.dp-dialog::backdrop { background: rgba(2, 4, 8, 0.65); backdrop-filter: blur(4px); }
+
+/* Dark polish: premium surfaces, subtle grid texture, thin scrollbars. */
+body { background-image: radial-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px); background-size: 22px 22px; }
+.recharts-tooltip-wrapper .recharts-default-tooltip { background: #111821 !important; border: 1px solid #2a3441 !important; border-radius: 12px; color: #e6edf3; }
+.recharts-text { fill: #8b98a5; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #243140; border-radius: 8px; border: 2px solid #0a0e13; }
+::-webkit-scrollbar-track { background: transparent; }
+.kpi-glow { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 10px 30px -18px rgba(0, 0, 0, 0.8); }

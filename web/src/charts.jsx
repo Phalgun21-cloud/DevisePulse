@@ -31,7 +31,7 @@ export function rowsFor(series, field) {
 }
 
 // Average line over a min-max band for one metric across the selected range.
-export function MetricChart({ series, field, unit = '', color = '#0b5e5a', domain = ['auto', 'auto'], refs = [], height = 240, digits = 1 }) {
+export function MetricChart({ series, field, unit = '', color = '#2dd4bf', domain = ['auto', 'auto'], refs = [], height = 240, digits = 1 }) {
   const rows = rowsFor(series, field);
   const span = series ? Date.parse(series.to) - Date.parse(series.from) : DAY;
   const fmt = (v) => (v === null || v === undefined ? '—' : `${Number(v).toFixed(digits)}${unit}`);
@@ -45,21 +45,21 @@ export function MetricChart({ series, field, unit = '', color = '#0b5e5a', domai
               <stop offset="100%" stopColor={color} stopOpacity={0.06} />
             </linearGradient>
           </defs>
-          <CartesianGrid stroke="#eceae2" vertical={false} />
+          <CartesianGrid stroke="#1f2833" vertical={false} />
           <XAxis
             dataKey="t"
             type="number"
             scale="time"
             domain={series ? [Date.parse(series.from), Date.parse(series.to)] : ['dataMin', 'dataMax']}
             tickFormatter={timeTick(span)}
-            tick={{ fontSize: 12, fill: '#4a5056' }}
+            tick={{ fontSize: 12, fill: '#8b98a5' }}
             minTickGap={28}
           />
-          <YAxis domain={domain} width={52} tick={{ fontSize: 12, fill: '#4a5056' }} tickFormatter={(v) => `${Number.isInteger(v) ? v : Number(v).toFixed(digits > 1 ? 2 : 1)}${unit}`} />
+          <YAxis domain={domain} width={52} tick={{ fontSize: 12, fill: '#8b98a5' }} tickFormatter={(v) => `${Number.isInteger(v) ? v : Number(v).toFixed(digits > 1 ? 2 : 1)}${unit}`} />
           <Tooltip
             labelFormatter={(t) => fmtWhen(t)}
             formatter={(v, name) => (Array.isArray(v) ? [`${fmt(v[0])} – ${fmt(v[1])}`, 'Range in bucket'] : [fmt(v), 'Average'])}
-            contentStyle={{ borderRadius: 12, border: '1px solid #dedcd3' }}
+            contentStyle={{ borderRadius: 12, border: '1px solid #2a3441' }}
           />
           {refs.map((r) => (
             <ReferenceLine key={r.y} y={r.y} stroke={r.color} strokeDasharray="5 4" label={{ value: r.label, position: 'insideTopRight', fill: r.color, fontSize: 11 }} />

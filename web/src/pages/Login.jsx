@@ -43,7 +43,7 @@ export default function Login() {
             Early warnings with the evidence behind every finding. Built for schools, clinics and small offices.
           </p>
         </div>
-        <form onSubmit={submit} className="glass spot flex flex-col gap-4 rounded-2xl border border-white/70 p-7 shadow-[0_30px_60px_-30px_rgba(11,60,58,0.45)]">
+        <form onSubmit={submit} className="glass spot flex flex-col gap-4 rounded-2xl border border-white/10 p-7 shadow-[0_30px_60px_-30px_rgba(0,0,0,0.8)]">
           <h1 className="m-0 text-xl font-semibold">{mode === 'login' ? 'Sign in' : 'Create an account'}</h1>
           {error && <Alert>{error}</Alert>}
           <label className="flex flex-col gap-1.5 text-sm font-medium">

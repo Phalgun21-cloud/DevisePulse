@@ -51,13 +51,13 @@ export default function Fleet() {
         <div className="h-80 w-full" role="img" aria-label="Bar chart of battery finding rate per model and BIOS group">
           <ResponsiveContainer>
             <BarChart data={rows} layout="vertical" margin={{ top: 4, right: 24, bottom: 4, left: 8 }}>
-              <CartesianGrid stroke="#eceae2" horizontal={false} />
-              <XAxis type="number" domain={[0, 100]} tickFormatter={(v) => `${v}%`} tick={{ fontSize: 12, fill: '#4a5056' }} />
-              <YAxis type="category" dataKey="label" width={170} tick={{ fontSize: 13, fill: '#1b1d1f' }} />
+              <CartesianGrid stroke="#1f2833" horizontal={false} />
+              <XAxis type="number" domain={[0, 100]} tickFormatter={(v) => `${v}%`} tick={{ fontSize: 12, fill: '#8b98a5' }} />
+              <YAxis type="category" dataKey="label" width={170} tick={{ fontSize: 13, fill: '#e6edf3' }} />
               <Tooltip formatter={(v, _n, p) => [`${v}% (${p.payload.withFinding} of ${p.payload.devices})`, 'With a finding']} />
               <Bar dataKey="ratePct" isAnimationActive={false} radius={[0, 4, 4, 0]}>
                 {rows.map((g) => (
-                  <Cell key={g.label} fill={g.pattern ? '#c2410c' : '#5b6166'} />
+                  <Cell key={g.label} fill={g.pattern ? '#f97316' : '#475569'} />
                 ))}
               </Bar>
             </BarChart>
@@ -77,7 +77,7 @@ export default function Fleet() {
             {rows.map((g) => (
               <tr key={g.label} className="border-t border-soft">
                 <td className="py-2 font-sans font-medium">
-                  {g.label} {g.pattern && <span className="ml-2 font-sans text-xs font-semibold text-[#9a3412]">pattern</span>}
+                  {g.label} {g.pattern && <span className="ml-2 font-sans text-xs font-semibold text-[#fb923c]">pattern</span>}
                 </td>
                 <td className="py-2 text-right">{g.devices}</td>
                 <td className="py-2 text-right">{g.withFinding}</td>

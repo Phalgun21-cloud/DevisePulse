@@ -11,6 +11,7 @@ import { deviceRoutes } from './routes/devices.js';
 import { ingestRoutes } from './routes/ingest.js';
 import { agentRoutes } from './routes/agent.js';
 import { seedDemo, fleetDemo } from './demo.js';
+import { overview, monitoring } from './overview.js';
 
 export function createApp({
   db,
@@ -41,6 +42,8 @@ export function createApp({
     res.status(result.created.length ? 201 : 200).json(result);
   }));
   app.get('/api/me', requireUser(jwtSecret), (req, res) => res.json({ id: req.user.id, email: req.user.email, database: db.dialect }));
+  app.get('/api/overview', requireUser(jwtSecret), wrap(async (req, res) => res.json(await overview(db, req.user.id))));
+  app.get('/api/monitoring', requireUser(jwtSecret), (_req, res) => res.json(monitoring(settings)));
   app.get('/api/fleet/demo', requireUser(jwtSecret), (_req, res) => res.json(fleetDemo(settings)));
   app.use(
     '/api/agent',

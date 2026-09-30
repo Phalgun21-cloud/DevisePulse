@@ -130,7 +130,7 @@ function Overview({ device, summary, series, findings, onTab }) {
   return (
     <>
       <div className="stagger grid grid-cols-2 gap-4 lg:grid-cols-5">
-        <Kpi label="Active findings" value={active.length} hint={active.length ? 'see Findings' : 'nothing to act on'} tone={active.length ? 'text-[#9a3412]' : ''} />
+        <Kpi label="Active findings" value={active.length} hint={active.length ? 'see Findings' : 'nothing to act on'} tone={active.length ? 'text-[#fb923c]' : ''} />
         <Kpi label="Battery health" value={battery.healthPct} unit="%" digits={1} hint="of original capacity" missingHint="No battery reading" />
         <Kpi label="Avg CPU (range)" value={series.cpu?.stats.cpuLoadPct.avg ?? null} unit="%" digits={1} hint={`${series.cpu?.stats.cpuLoadPct.count ?? 0} readings`} missingHint={series.cpu ? 'No CPU readings in range' : 'Loading…'} />
         <Kpi label="Peak memory (range)" value={series.cpu?.stats.memUsedPct.max ?? null} unit="%" digits={1} hint={`average ${series.cpu?.stats.memUsedPct.avg ?? '—'}%`} missingHint={series.cpu ? 'No memory readings in range' : 'Loading…'} />
@@ -141,7 +141,7 @@ function Overview({ device, summary, series, findings, onTab }) {
         <Card title="Battery" right={battery.status === 'collecting' ? <Status>Collecting data</Status> : battery.forecast ? <Status>Trend available</Status> : <Severity level="Normal">Stable</Severity>}>
           <Stat label="Health (of original capacity)" value={battery.healthPct} unit="%" hint="No battery reading yet" />
           {latest.battery && (
-            <div className="font-mono text-sm text-[#33383d]">
+            <div className="font-mono text-sm text-[#c3ccd6]">
               {latest.battery.values.fullChargeWh} Wh now · {latest.battery.values.designWh} Wh when new
             </div>
           )}
@@ -180,13 +180,13 @@ function Overview({ device, summary, series, findings, onTab }) {
       {(series.cpu?.sampleCount ?? 0) > 0 && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <ChartCard title="CPU load" series={series.cpu} field="cpuLoadPct" unit="%" domain={[0, 100]} />
-          <ChartCard title="Memory used" series={series.cpu} field="memUsedPct" unit="%" domain={[0, 100]} color="#4b2f8f" />
+          <ChartCard title="Memory used" series={series.cpu} field="memUsedPct" unit="%" domain={[0, 100]} color="#a78bfa" />
         </div>
       )}
 
       <Card title="Active findings" right={findings.length > 0 && <Button variant="ghost" onClick={() => onTab('findings')}>All findings →</Button>}>
         {active.length === 0 ? (
-          <div className="flex flex-col items-center gap-1.5 rounded-lg border-[1.5px] border-dashed border-[#c9c6ba] p-7 text-center">
+          <div className="flex flex-col items-center gap-1.5 rounded-lg border-[1.5px] border-dashed border-[#334155] p-7 text-center">
             <div className="font-semibold">No findings</div>
             <div className="max-w-2xl text-sm text-muted">A finding is shown only after two checks in a row agree, and it clears after three normal checks.</div>
           </div>
@@ -202,17 +202,17 @@ function Performance({ series, summary }) {
   const c = series.cpu;
   return (
     <>
-      <ChartCard title="CPU load" series={c} field="cpuLoadPct" unit="%" domain={[0, 100]} refs={[{ y: 85, label: 'Diagnose: busy 85%', color: '#9a3412' }]} />
+      <ChartCard title="CPU load" series={c} field="cpuLoadPct" unit="%" domain={[0, 100]} refs={[{ y: 85, label: 'Diagnose: busy 85%', color: '#fb923c' }]} />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <ChartCard title="Memory used" series={c} field="memUsedPct" unit="%" domain={[0, 100]} color="#4b2f8f" refs={[{ y: 90, label: '90%', color: '#9a3412' }]} />
+        <ChartCard title="Memory used" series={c} field="memUsedPct" unit="%" domain={[0, 100]} color="#a78bfa" refs={[{ y: 90, label: '90%', color: '#fb923c' }]} />
         <ChartCard
           title="Processor speed (× base clock)"
           series={c}
           field="cpuFreqRatio"
           unit="×"
           digits={2}
-          color="#b45309"
-          refs={[{ y: 0.75, label: 'Throttling below 0.75× under load', color: '#9a3412' }]}
+          color="#f59e0b"
+          refs={[{ y: 0.75, label: 'Throttling below 0.75× under load', color: '#fb923c' }]}
           empty="This device does not report processor speed."
         />
         <ChartCard
@@ -220,10 +220,10 @@ function Performance({ series, summary }) {
           series={c}
           field="cpuTempC"
           unit=" °C"
-          color="#b42318"
+          color="#f87171"
           empty="Temperature is not exposed on this device (common on Windows). DevicePulse does not guess; it watches processor speed under sustained load instead."
         />
-        <ChartCard title="Swap used" series={c} field="swapUsedPct" unit="%" domain={[0, 100]} color="#1d4e89" />
+        <ChartCard title="Swap used" series={c} field="swapUsedPct" unit="%" domain={[0, 100]} color="#60a5fa" />
       </div>
       <Card title="Thermal check" right={<Status>{thermalStatus[summary.thermal.status] ?? summary.thermal.status}</Status>}>
         <p className="m-0 max-w-3xl text-sm text-muted">
@@ -249,17 +249,17 @@ function StorageTab({ series, summary }) {
   ];
   return (
     <>
-      <ChartCard title="Timed disk test (8 MB write + fsync + read)" series={s} field="ioProbeMs" unit=" ms" color="#0b5e5a" empty="No disk tests in this range. The agent runs one every 15 minutes." />
+      <ChartCard title="Timed disk test (8 MB write + fsync + read)" series={s} field="ioProbeMs" unit=" ms" color="#2dd4bf" empty="No disk tests in this range. The agent runs one every 15 minutes." />
       <ChartCard
         title="Free space"
         series={s}
         field="freeSpacePct"
         unit="%"
         domain={[0, 100]}
-        color="#1d4e89"
+        color="#60a5fa"
         refs={[
-          { y: 10, label: 'Information below 10%', color: '#1d4e89' },
-          { y: 5, label: 'Watch below 5%', color: '#9a3412' },
+          { y: 10, label: 'Information below 10%', color: '#60a5fa' },
+          { y: 5, label: 'Watch below 5%', color: '#fb923c' },
         ]}
       />
       <Card title="Drive health (SMART)" right={<Status>{probeStatus[summary.storage.status.probe] ?? summary.storage.status.probe}</Status>}>
@@ -305,8 +305,8 @@ function BatteryTab({ device, summary, series, range }) {
         )}
         <StatStrip stats={series.battery?.stats.healthPct} unit="%" />
       </Card>
-      <ChartCard title="Charge level" series={series.battery} field="percent" unit="%" domain={[0, 100]} color="#16a37a" empty="No charge-level readings in this range." />
-      <ChartCard title="Full-charge capacity" series={series.battery} field="fullChargeWh" unit=" Wh" color="#b45309" />
+      <ChartCard title="Charge level" series={series.battery} field="percent" unit="%" domain={[0, 100]} color="#34d399" empty="No charge-level readings in this range." />
+      <ChartCard title="Full-charge capacity" series={series.battery} field="fullChargeWh" unit=" Wh" color="#f59e0b" />
     </>
   );
 }
@@ -346,7 +346,7 @@ function DiagnosesTab({ device }) {
       title="Slow-laptop diagnoses"
       right={
         !device.isSimulated && (
-          <Link to={`/devices/${device.id}/diagnose`} className="press inline-flex min-h-10 items-center rounded-lg bg-brand px-4 text-sm font-semibold text-white no-underline hover:bg-brand-dark hover:text-white">
+          <Link to={`/devices/${device.id}/diagnose`} className="press inline-flex min-h-10 items-center rounded-lg bg-brand px-4 text-sm font-semibold text-[#04201d] no-underline hover:bg-brand-dark hover:text-[#04201d]">
             Run a diagnosis
           </Link>
         )
@@ -530,7 +530,7 @@ export default function DeviceDetail() {
   return (
     <>
       {device.isSimulated && (
-        <div className="rounded-lg border-[1.5px] border-dashed border-[#5b3fa0] bg-sim-soft px-5 py-3 text-sm font-semibold text-[#3b2477]">
+        <div className="rounded-lg border-[1.5px] border-dashed border-[#8b7cf6] bg-sim-soft px-5 py-3 text-sm font-semibold text-[#c4b5fd]">
           Simulated device. Every number on this page is synthetic data from the seeded simulator, not a measurement.
         </div>
       )}
@@ -552,7 +552,7 @@ export default function DeviceDetail() {
           </div>
         </div>
         {!device.isSimulated && (
-          <Link to={`/devices/${device.id}/diagnose`} className="press inline-flex min-h-11 items-center rounded-lg bg-brand px-5 font-semibold text-white no-underline hover:bg-brand-dark hover:text-white">
+          <Link to={`/devices/${device.id}/diagnose`} className="press inline-flex min-h-11 items-center rounded-lg bg-brand px-5 font-semibold text-[#04201d] no-underline hover:bg-brand-dark hover:text-[#04201d]">
             Why is it slow? Diagnose
           </Link>
         )}
@@ -565,10 +565,10 @@ export default function DeviceDetail() {
             key={k}
             onClick={() => setParam({ tab: k === 'overview' ? null : k })}
             aria-current={tab === k ? 'page' : undefined}
-            className={`min-h-10 shrink-0 rounded-lg px-4 text-sm transition-all duration-200 ${tab === k ? 'bg-ink font-semibold text-white shadow-md' : 'text-muted hover:bg-soft hover:text-ink'}`}
+            className={`min-h-10 shrink-0 rounded-lg px-4 text-sm transition-all duration-200 ${tab === k ? 'bg-[#e6edf3] font-semibold text-[#0a0e13] shadow-md' : 'text-muted hover:bg-soft hover:text-ink'}`}
           >
             {label}
-            {k === 'findings' && active.length > 0 && <span className="ml-2 rounded-full bg-[#ffe4d6] px-1.5 text-xs font-bold text-[#9a3412]">{active.length}</span>}
+            {k === 'findings' && active.length > 0 && <span className="ml-2 rounded-full bg-[#3b1d0f] px-1.5 text-xs font-bold text-[#fb923c]">{active.length}</span>}
           </button>
         ))}
       </nav>
@@ -582,7 +582,7 @@ export default function DeviceDetail() {
                 key={k}
                 onClick={() => setParam({ range: k === '7d' ? null : k, from: null, to: null })}
                 aria-pressed={range === k}
-                className={`min-h-9 rounded-md px-3 text-sm ${range === k ? 'bg-brand font-semibold text-white' : 'text-muted hover:text-ink'}`}
+                className={`min-h-9 rounded-md px-3 text-sm ${range === k ? 'bg-brand font-semibold text-[#04201d]' : 'text-muted hover:text-ink'}`}
               >
                 {label}
               </button>

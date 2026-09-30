@@ -61,7 +61,7 @@ export function DeviceSettings({ device, onSaved }) {
           <Button type="submit" disabled={busy}>
             Save changes
           </Button>
-          <Button type="button" variant="secondary" className="text-[#8a1c12]" onClick={() => dialog.current?.showModal()}>
+          <Button type="button" variant="secondary" className="text-[#fca5a5]" onClick={() => dialog.current?.showModal()}>
             Delete device
           </Button>
         </div>
