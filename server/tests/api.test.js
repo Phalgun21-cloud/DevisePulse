@@ -395,6 +395,7 @@ describe('diagnose command channel', () => {
     expect(res.body.result.verdict).toBe('causes_found');
     expect(res.body.result.causes[0]).toMatchObject({ rule: 'cpu_saturated', process: 'cpu_hog.py', rank: 1 });
     expect(res.body.result.explanation).toMatch(/cpu_hog\.py/);
+    expect(res.body.sample).toEqual(sampleBody); // raw numbers returned as evidence, to the owner only
   });
 
   it('a second request while one is open returns the same request, not a duplicate', async () => {

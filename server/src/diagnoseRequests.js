@@ -34,5 +34,6 @@ export function publicRequest(row) {
     createdAt: row.created_at,
     completedAt: row.completed_at,
     result: row.result ? JSON.parse(row.result) : null,
+    sample: row.sample ? JSON.parse(row.sample) : null, // evidence: numbers and process names only
   };
 }

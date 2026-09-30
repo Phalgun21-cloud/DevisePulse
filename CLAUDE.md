@@ -57,8 +57,10 @@ python agent\probe.py --save
   spanning at least 14 days; otherwise report "collecting data" and no forecast.
 - Device tokens and passwords are stored only as hashes. Foreign and missing device ids both return 404.
 - LLM layer is optional polish. Detection and explanations must work without any AI key.
-- Disk busy % and latency are `null` when psutil counts disk operations but no time spent (seen on Windows 11:
-  `read_time`/`write_time` never advance). A latency of 0 is never sent. Swap activity is `null` on Windows.
+- Disk busy % and latency on Windows come from the `PhysicalDisk(_Total)` performance counters, never psutil (whose
+  Windows time counters read 0.1% busy during a 40 GB write). Elsewhere psutil deltas; `null` when operations were counted
+  but no time was. A latency of 0 is never sent. Swap activity is `null` on Windows.
+- Top processes are grouped by name (summed CPU and memory, with a `count`) before ranking.
 - The agent sends process NAMES only (top 5, with CPU % and memory MB), never command lines, paths or arguments.
   The server's diagnose schema is `.strict()` and rejects any extra field.
 - CPU frequency on Windows comes from the `% Processor Performance` counter (typeperf, built in, no admin), never

@@ -3,14 +3,18 @@
 #   powershell -ExecutionPolicy Bypass -File chaos\e2e_diagnose.ps1
 #
 # Runs its own API on port 4100 with a throwaway database (your dev database is not touched),
-# starts the real agent, runs an idle diagnosis, then runs chaos\cpu_hog.py (answering "yes" for you)
-# and diagnoses under load. Writes logs and results.json to -OutDir, and prints PASS/FAIL per check.
-# cpu_hog.py keeps its own safety checks: 120 s cap, refuses on battery below 30% when unplugged.
+# starts the real agent, runs an idle diagnosis, then for each scenario runs a chaos\*_hog.py script
+# (answering "yes" for you) and diagnoses under that load. Writes logs and results.json to -OutDir and prints
+# PASS / FAIL / N/A per check. N/A means this laptop cannot measure that rule (the rule was skipped, reading null).
+# The hog scripts keep their own safety checks (time cap, battery, memory and disk-space limits).
+#
+#   -Scenarios cpu,memory,disk   (default: all three)
 
 param(
   [string]$OutDir = (Join-Path $env:TEMP 'devicepulse-e2e'),
   [int]$Port = 4100,
-  [int]$HogSeconds = 90,
+  [int]$HogSeconds = 60,
+  [string[]]$Scenarios = @('cpu', 'memory', 'disk'),
   [switch]$SkipTests
 )
 
@@ -27,6 +31,42 @@ function Check($name, [bool]$ok, $detail) {
   Write-Host ("[{0}] {1}  {2}" -f $(if ($ok) { 'PASS' } else { 'FAIL' }), $name, $detail) -ForegroundColor $(if ($ok) { 'Green' } else { 'Red' })
 }
 
+function Info($name, $detail) {
+  [void]$checks.Add([pscustomobject]@{ Check = $name; Result = 'INFO'; Detail = "$detail" })
+  Write-Host "[INFO] $name  $detail" -ForegroundColor Cyan
+}
+
+function NotMeasurable($name, $detail) {
+  [void]$checks.Add([pscustomobject]@{ Check = $name; Result = 'N/A'; Detail = "$detail" })
+  Write-Host "[N/A ] $name  $detail" -ForegroundColor Yellow
+}
+
+# Start a hog, wait until it says it is loaded, diagnose, stop it. Returns the diagnosis (or $null).
+function UnderLoad($label, $script, $readyPattern, $h, $deviceId) {
+  $log = Join-Path $OutDir "$label.log"
+  $yes = Join-Path $OutDir "$label.stdin.txt"  # one per hog: worker processes inherit and hold it open
+  Set-Content -Path $yes -Value 'yes' -Encoding ascii
+  $p = Start-Process python -ArgumentList @('-u', $script, '--seconds', "$HogSeconds") -WorkingDirectory $root -PassThru -NoNewWindow `
+    -RedirectStandardInput $yes -RedirectStandardOutput $log -RedirectStandardError "$log.err"
+  $script:hogs += $p
+  $ready = $false
+  for ($i = 0; $i -lt 60 -and -not $ready -and -not $p.HasExited; $i++) {
+    Start-Sleep 1
+    $ready = [bool](Select-String -Path $log -Pattern $readyPattern -Quiet)
+  }
+  Check "${label}: hog started (safety checks passed)" $ready ((Get-Content $log -ErrorAction SilentlyContinue) -join ' / ')
+  if (-not $ready) { if (-not $p.HasExited) { Stop-Process $p.Id -Force }; return $null }
+  Start-Sleep 3
+  $d = Diagnose $h $deviceId
+  # Let the hog end on its own so it cleans up and the next scenario is not measured on top of it.
+  Write-Host "   waiting for $label hog to finish its run..."
+  if (-not $p.WaitForExit(($HogSeconds + 30) * 1000)) { Stop-Process $p.Id -Force -ErrorAction SilentlyContinue }
+  Start-Sleep 3
+  $report[$label] = $d
+  Check "${label}: request completes" ($d.status -eq 'done') "$($d.statusTrail) in $($d.waitedSec)s"
+  return $d
+}
+
 function Diagnose($h, $deviceId, [int]$timeoutSec = 75) {
   $req = Invoke-RestMethod -Method Post "$b/api/devices/$deviceId/diagnose" -Headers $h
   $t0 = Get-Date
@@ -41,7 +81,8 @@ function Diagnose($h, $deviceId, [int]$timeoutSec = 75) {
   return $r
 }
 
-$server = $agent = $hog = $null
+$server = $agent = $null
+$script:hogs = @()
 try {
   # 1. unit and API tests
   if (-not $SkipTests) {
@@ -107,41 +148,76 @@ try {
   catch { $code = [int]$_.Exception.Response.StatusCode }
   Check "other user gets 404" ($code -eq 404) "HTTP $code"
 
-  # 7. under load (the gate)
-  Write-Host "== 7. cpu_hog.py for $HogSeconds s + diagnosis" -ForegroundColor Cyan
-  $yes = Join-Path $OutDir 'yes.txt'
-  Set-Content -Path $yes -Value 'yes' -Encoding ascii
-  $hog = Start-Process python -ArgumentList @('-u', 'chaos\cpu_hog.py', '--seconds', "$HogSeconds") -WorkingDirectory $root -PassThru -NoNewWindow `
-    -RedirectStandardInput $yes -RedirectStandardOutput "$OutDir\cpu_hog.log" -RedirectStandardError "$OutDir\cpu_hog.err.log"
-  $running = $false
-  for ($i = 0; $i -lt 20 -and -not $running -and -not $hog.HasExited; $i++) {
-    Start-Sleep 1
-    $running = [bool](Select-String -Path "$OutDir\cpu_hog.log" -Pattern 'Running\.' -Quiet)  # same line as the prompt: input() prints no newline
+  $hedged = { param($t) ($t -match 'consistent with|may') -and ($t -notmatch 'will fail') }
+
+  # 7. CPU (the task 2 gate)
+  if ($Scenarios -contains 'cpu') {
+    Write-Host "== 7. cpu_hog.py + diagnosis" -ForegroundColor Cyan
+    $d = UnderLoad 'cpu' 'chaos\cpu_hog.py' 'Running\.' $h $dev.id  # "Running." is on the prompt line: input() prints no newline
+    if ($d) {
+      $c = $d.result.causes | Where-Object rule -eq 'cpu_saturated' | Select-Object -First 1
+      Check 'cpu: CPU ranked first' ($d.result.causes[0].rule -eq 'cpu_saturated') "top=$($d.result.causes[0].rule) cpuPct=$($c.evidence.cpuPct)"
+      Check 'cpu: names the hog, grouped' ($c.process -eq 'python.exe' -and $c.evidence.processCount -gt 1) "process=$($c.process) x$($c.evidence.processCount) = $($c.evidence.topProcessCpuPct)% of CPU"
+      Check 'cpu: explanation hedged' (& $hedged $d.result.explanation) $d.result.explanation
+    }
   }
-  Check 'cpu_hog started (safety checks passed)' $running ((Get-Content "$OutDir\cpu_hog.log" -ErrorAction SilentlyContinue) -join ' / ')
-  if ($running) {
-    Start-Sleep 3
-    $load = Diagnose $h $dev.id
-    $report.underLoad = $load
-    $top = $load.result.causes | Select-Object -First 1
-    Check 'load: request completes' ($load.status -eq 'done') "$($load.statusTrail) in $($load.waitedSec)s"
-    Check 'load: CPU ranked first' ($top.rule -eq 'cpu_saturated') "top=$($top.rule) cpuPct=$($top.evidence.cpuPct)"
-    Check 'load: names the hog process' ($top.process -eq 'python.exe') "process=$($top.process) ($($top.evidence.topProcessCpuPct)% of CPU)"
-    Check 'load: explanation names it, hedged' (($load.result.explanation -match 'python\.exe') -and ($load.result.explanation -match 'consistent with|may') -and ($load.result.explanation -notmatch 'will fail')) $load.result.explanation
+
+  # 8. memory
+  if ($Scenarios -contains 'memory') {
+    Write-Host "== 8. mem_hog.py + diagnosis" -ForegroundColor Cyan
+    $d = UnderLoad 'memory' 'chaos\mem_hog.py' 'Holding|Refusing' $h $dev.id
+    if ($d) {
+      $c = $d.result.causes | Where-Object rule -eq 'memory_pressure' | Select-Object -First 1
+      if ($d.result.skippedRules -contains 'memory_pressure') { NotMeasurable 'memory: rule fires' 'memory readings were null' }
+      else { Check 'memory: memory_pressure found' ([bool]$c) "sample memUsedPct=$($d.sample.memUsedPct) swap=$($d.sample.swapActivityBytes)" }
+      if ($c) {
+        Check 'memory: names the hog' ($c.process -eq 'python.exe') "process=$($c.process) x$($c.evidence.processCount) = $($c.evidence.topProcessMemMb) MB"
+        Check 'memory: explanation hedged' (& $hedged $d.result.explanation) $d.result.explanation
+      }
+    }
+  }
+
+  # 9. disk
+  if ($Scenarios -contains 'disk') {
+    Write-Host "== 9. disk_hog.py + diagnosis" -ForegroundColor Cyan
+    $d = UnderLoad 'disk' 'chaos\disk_hog.py' 'Running on|Refusing' $h $dev.id
+    if ($d) {
+      $c = $d.result.causes | Where-Object rule -eq 'disk_saturated' | Select-Object -First 1
+      $s = $d.sample
+      if ($d.result.skippedRules -contains 'disk_saturated') {
+        NotMeasurable 'disk: busy/latency measured' 'disk busy % and latency were null'
+      } else {
+        Check 'disk: busy/latency measured' ($null -ne $s.diskBusyPct) "busy=$($s.diskBusyPct)% latency=$($s.diskLatencyMs) ms"
+        $msg = if ($c) { "fired: busy=$($c.evidence.diskBusyPct)% latency=$($c.evidence.diskLatencyMs) ms" } else { "did not fire: busy $($s.diskBusyPct)% is under the 80% threshold and latency $($s.diskLatencyMs) ms is not 3x this device's baseline (baseline needs 3 earlier diagnoses)" }
+        Info 'disk: disk_saturated' $msg
+      }
+    }
   }
 } catch {
   Check 'script ran to the end' $false $_.Exception.Message
 } finally {
-  foreach ($p in @($hog, $agent, $server)) { if ($p -and -not $p.HasExited) { Stop-Process $p.Id -Force -ErrorAction SilentlyContinue } }
-  # cpu_hog workers are child processes; make sure none outlive the test
-  Get-CimInstance Win32_Process -Filter "Name='python.exe'" | Where-Object { $_.CommandLine -match 'multiprocessing' -and $hog -and $_.ParentProcessId -eq $hog.Id } |
-    ForEach-Object { Stop-Process $_.ProcessId -Force -ErrorAction SilentlyContinue }
+  # Let hogs finish their own cleanup (disk_hog deletes its temp file); force-stop only if they overrun.
+  foreach ($p in $script:hogs) {
+    if ($p -and -not $p.HasExited -and -not $p.WaitForExit(($HogSeconds + 30) * 1000)) { Stop-Process $p.Id -Force -ErrorAction SilentlyContinue }
+  }
+  foreach ($p in @($agent, $server)) { if ($p -and -not $p.HasExited) { Stop-Process $p.Id -Force -ErrorAction SilentlyContinue } }
+  foreach ($label in 'cpu', 'memory', 'disk') {
+    $log = Join-Path $OutDir "$label.log"
+    if (Test-Path $log) {
+      $done = Select-String -Path $log -Pattern '^Done\..*' | Select-Object -Last 1
+      Check "${label}: hog cleaned up" ([bool]$done -and ($label -ne 'disk' -or $done.Line -match 'deleted: True')) $(if ($done) { $done.Line } else { 'no Done line' })
+    }
+  }
+  $left = @(Get-ChildItem $env:TEMP -Filter 'devicepulse-disk-hog-*.tmp' -ErrorAction SilentlyContinue)
+  $left | Remove-Item -Force -ErrorAction SilentlyContinue
+  if ($Scenarios -contains 'disk') { Check 'no disk_hog temp file left' ($left.Count -eq 0) "$($left.Count) found" }
   $report.finishedAt = (Get-Date).ToString('s')
   $report.checks = $checks
   $report | ConvertTo-Json -Depth 10 | Set-Content -Encoding utf8 (Join-Path $OutDir 'results.json')
   Write-Host ''
   $checks | Format-Table -AutoSize -Wrap | Out-String -Width 200 | Write-Host
   $failed = @($checks | Where-Object Result -eq 'FAIL').Count
-  Write-Host "$($checks.Count - $failed)/$($checks.Count) checks passed. Logs and results.json in $OutDir"
+  $na = @($checks | Where-Object Result -eq 'N/A').Count
+  Write-Host "$(@($checks | Where-Object Result -eq 'PASS').Count) passed, $failed failed, $na not measurable on this laptop. Logs and results.json in $OutDir"
   if ($failed) { exit 1 }
 }

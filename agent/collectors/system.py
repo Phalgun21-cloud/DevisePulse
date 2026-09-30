@@ -15,24 +15,41 @@ PERF_COUNTER = r"\Processor Information(_Total)\% Processor Performance"
 MAX_FREQ_RATIO = 2.5  # turbo reads above base; anything higher is a bad reading
 
 
+def parse_typeperf_columns(text: str) -> list[list[float]]:
+    """Pure. typeperf CSV -> one list of numeric samples per counter column (blank samples skipped)."""
+    lines = [ln for ln in text.splitlines() if ln.startswith('"')]
+    if not lines:
+        return []
+    width = len(lines[0].split('","')) - 1  # first column is the timestamp
+    cols: list[list[float]] = [[] for _ in range(max(0, width))]
+    for line in lines[1:]:
+        parts = [p.strip().strip('"').strip() for p in line.split('","')][1:]
+        for i, raw in enumerate(parts[:width]):
+            try:
+                v = float(raw)
+            except ValueError:
+                continue
+            if v >= 0:
+                cols[i].append(v)
+    return cols
+
+
 def parse_typeperf_csv(text: str) -> Optional[float]:
-    """Pure. Average of the numeric samples in typeperf CSV output, or None if there are none."""
-    values = []
-    for line in text.splitlines()[1:]:  # first line is the header
-        parts = [p.strip().strip('"').strip() for p in line.split('","')]
-        if len(parts) < 2:
-            continue
-        try:
-            v = float(parts[-1].strip('"'))
-        except ValueError:
-            continue  # blank sample, or a status line
-        if v >= 0:
-            values.append(v)
+    """Pure. Average of the last counter's numeric samples, or None if there are none."""
+    cols = parse_typeperf_columns(text)
+    values = cols[-1] if cols else []
     return round(sum(values) / len(values), 2) if values else None
 
 
-def typeperf_command(samples: int) -> list[str]:
-    return ["typeperf", PERF_COUNTER, "-si", "1", "-sc", str(max(1, int(samples)))]
+DISK_COUNTERS = [
+    r"\PhysicalDisk(_Total)\% Idle Time",
+    r"\PhysicalDisk(_Total)\Avg. Disk sec/Transfer",
+    r"\PhysicalDisk(_Total)\Disk Transfers/sec",
+]
+
+
+def typeperf_command(samples: int, counters: Optional[list[str]] = None) -> list[str]:
+    return ["typeperf", *(counters or [PERF_COUNTER]), "-si", "1", "-sc", str(max(1, int(samples)))]
 
 
 def read_perf_pct(samples: int = 1) -> Optional[float]:

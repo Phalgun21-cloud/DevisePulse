@@ -13,7 +13,7 @@ import time
 from types import SimpleNamespace
 from typing import Optional
 
-from collectors.system import freq_fields, parse_typeperf_csv, typeperf_command
+from collectors.system import DISK_COUNTERS, PERF_COUNTER, freq_fields, parse_typeperf_columns, typeperf_command
 
 TOP_N = 5
 TOP_BY_CPU = 3  # the rest of the slots go to the biggest memory users not already listed
@@ -54,6 +54,21 @@ def _disk(io0, io1, elapsed_s: float) -> tuple[Optional[float], Optional[float]]
     if latency is not None and latency <= 0:
         latency = None  # a zero latency is an unmeasured one, never a real reading
     return busy_pct, latency
+
+
+def windows_disk_fields(idle_pcts: list, sec_per_transfer: list, transfers_per_sec: list) -> tuple:
+    """Pure. Windows disk counters -> (busy %, latency ms). psutil's Windows time counters are not used:
+    they read "0.1% busy" while 40 GB was being written on a real laptop."""
+    if not idle_pcts:
+        return None, None
+    idle = sum(min(100.0, max(0.0, v)) for v in idle_pcts) / len(idle_pcts)  # the counter can read above 100
+    busy = round(100.0 - idle, 1)
+    pairs = list(zip(sec_per_transfer, transfers_per_sec))
+    total = sum(t for _, t in pairs)
+    latency = round(sum(s * t for s, t in pairs) / total * 1000.0, 2) if total > 0 else None
+    if latency is not None and latency <= 0:
+        latency = None
+    return busy, latency
 
 
 def group_by_name(processes: list[dict]) -> list[dict]:
@@ -99,9 +114,13 @@ def build_diagnose_sample(
     processes: list[dict],
     is_windows: bool,
     perf_pct: Optional[float] = None,
+    windows_disk: Optional[tuple] = None,
 ) -> dict:
     """Pure. Missing readings stay None; nothing is ever filled in with zero."""
-    busy_pct, latency_ms = _disk(io0, io1, elapsed_s)
+    if is_windows:
+        busy_pct, latency_ms = windows_disk if windows_disk else (None, None)
+    else:
+        busy_pct, latency_ms = _disk(io0, io1, elapsed_s)
 
     swap_bytes: Optional[float] = None
     if not is_windows and swap_io0 is not None and swap_io1 is not None:  # Windows always reports 0
@@ -156,7 +175,7 @@ def take_sample(duration_s: float = 10.0) -> dict:
     if is_windows:  # effective CPU speed, sampled across the same window (psutil's is a fixed number there)
         try:
             perf_proc = subprocess.Popen(
-                typeperf_command(max(1, int(duration_s) - 1)),
+                typeperf_command(max(1, int(duration_s) - 1), [PERF_COUNTER, *DISK_COUNTERS]),
                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
             )
         except OSError:
@@ -171,10 +190,14 @@ def take_sample(duration_s: float = 10.0) -> dict:
     io1, swap1 = disk_counters(), swap_counters()
 
     perf_pct = None
+    windows_disk = None
     if perf_proc is not None:
         try:
             out, _ = perf_proc.communicate(timeout=10)
-            perf_pct = parse_typeperf_csv(out) if perf_proc.returncode == 0 else None
+            cols = parse_typeperf_columns(out) if perf_proc.returncode == 0 else []
+            if len(cols) == 4:
+                perf_pct = round(sum(cols[0]) / len(cols[0]), 2) if cols[0] else None
+                windows_disk = windows_disk_fields(cols[1], cols[2], cols[3])
         except subprocess.TimeoutExpired:
             perf_proc.kill()
             perf_proc.communicate()
@@ -219,4 +242,5 @@ def take_sample(duration_s: float = 10.0) -> dict:
         processes=rows,
         is_windows=is_windows,
         perf_pct=perf_pct,
+        windows_disk=windows_disk,
     )

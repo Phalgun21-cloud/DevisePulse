@@ -93,11 +93,38 @@ seen failing on import before the code existed.
 | Slow-laptop diagnosis: CPU, memory % | **Real** | psutil |
 | Diagnosis: throttling | **Real** (from this change on) | Windows performance counter |
 | Diagnosis: swap activity | Not available (rule uses memory % only) | psutil cannot measure paging on Windows |
-| Diagnosis: disk busy / latency | Not available from psutil; task 3's timed probe is the replacement | time counters frozen |
+| Diagnosis: disk busy / latency | **Real** (from 2b on) | Windows PhysicalDisk counters; psutil's are wrong on Windows |
 | Storage Tier A (SMART) | **Simulated / fixtures only** | smartctl not installed |
 | Storage Tier B (timed write/read) | Real once built (task 3) | needs only a temp file |
 | Thermal (temperature at same load) | **Simulated only** | no temperature source |
 | Thermal fallback (frequency drop under load) | Real frequency available | Windows performance counter |
+
+## Task 2 leftovers (2b), 2026-09-30, same laptop
+
+Built: processes grouped by name before ranking (with a `count`); `chaos/mem_hog.py` and `chaos/disk_hog.py`;
+`chaos/e2e_diagnose.ps1 -Scenarios cpu,memory,disk`; diagnose results now also return the raw sample as evidence.
+Tests: 72 server (Vitest), 67 agent (pytest). All new tests were seen failing first.
+
+Real run of `chaos\e2e_diagnose.ps1` (all three scenarios): **23 checks: 22 PASS, 1 INFO, 0 FAIL.**
+
+| Scenario | Result on this laptop |
+| --- | --- |
+| CPU (`cpu_hog`, 8 cores) | cpu_saturated ranked 1st, CPU 100%, "python.exe (10 processes) ... 86.1% of CPU" (8 workers + hog parent + agent) |
+| Memory (`mem_hog`, target 93%) | memory_pressure found: memUsedPct 92.5, biggest user python.exe x2 = 2450 MB. Swap activity null (Windows). |
+| Disk (`disk_hog`, 1 GB file, 42.8 GB written) | Readings are real: busy 28.8%, latency 0.25 ms. disk_saturated **did not fire**: this NVMe is not saturated by one sequential writer. Not a code failure; the rule could not be triggered on this laptop. |
+| Cleanup | all hogs printed Done; disk temp file deleted; none left in %TEMP% |
+
+Two more real-hardware findings, both fixed test-first (no thresholds changed):
+1. **mem_hog first version was compressed away.** It held 1.75 GB of a repeated byte and reported 93% used, but the agent read
+   88.5% 10 s later (Windows memory compression). Now filled with `os.urandom` chunks; the diagnosis then read 92.5%.
+2. **psutil's Windows disk time counters are wrong, not just frozen.** While 40 GB was being written they gave `diskBusyPct 0.1`.
+   On Windows the agent now uses the `PhysicalDisk(_Total)` counters (`% Idle Time`, `Avg. Disk sec/Transfer`,
+   `Disk Transfers/sec`) via typeperf, no admin: idle about 0% busy, under disk_hog 21-77% busy (about 32% average).
+   psutil disk time is no longer used on Windows at all. `% Idle Time` can read above 100 (seen 140.5), so it is clamped.
+
+The e2e script itself needed two fixes during the run (shown as FAILs in earlier runs, not hidden): the `yes` stdin file was
+held open by cpu_hog's worker processes, and force-stopping hogs skipped their cleanup. Hogs now each get their own stdin file
+and are allowed to finish on their own.
 
 ## Also verified by hand
 - Real server + real agent, one upload: sample stored, missing CPU temperature kept as null (not zero).
@@ -107,7 +134,7 @@ seen failing on import before the code existed.
 ## NOT yet run (do not claim these)
 - Probe on any laptop other than the Dell Inspiron 15 5510 (task 1 asks for every demo laptop).
 - The throttling rule against a laptop that actually throttles (only the counter reading was verified, not a throttle event).
-- Task 2: memory, throttling and disk-busy rules against real load (unit-tested only; no mem_hog/disk_hog yet). Request expiry was tested only in Vitest, not by waiting 10 minutes on the real agent.
+- Task 2: disk_saturated firing on real hardware (this NVMe could not be saturated), and the throttling rule firing (no throttle event produced). Request expiry was tested only in Vitest, not by waiting 10 minutes on the real agent.
 - Storage and thermal detectors: not built yet.
 - Real-device fault injection (chaos/), 48-hour soak, web dashboard, end-to-end browser test.
 - Scenario accuracy over 200 healthy simulated devices (only the battery scenarios exist so far).
