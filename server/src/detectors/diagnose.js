@@ -36,7 +36,12 @@ export function diagnose(sample, settings, baseline = {}) {
       rule: 'cpu_saturated',
       score: cpu / s.cpuPct,
       process: hog?.name ?? null,
-      evidence: { cpuPct: cpu, thresholdPct: s.cpuPct, topProcessCpuPct: hog ? hog.cpuPct : null },
+      evidence: {
+        cpuPct: cpu,
+        thresholdPct: s.cpuPct,
+        topProcessCpuPct: hog ? hog.cpuPct : null,
+        processCount: hog ? (hog.count ?? 1) : null,
+      },
     });
   }
 
@@ -55,6 +60,7 @@ export function diagnose(sample, settings, baseline = {}) {
         thresholdPct: s.memUsedPct,
         swapActivityBytes: swap,
         topProcessMemMb: big ? big.memMb : null,
+        processCount: big ? (big.count ?? 1) : null,
       },
     });
   }

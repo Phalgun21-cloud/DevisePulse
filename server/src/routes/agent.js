@@ -14,6 +14,7 @@ const procs = z
         name: z.string().trim().min(1).max(80),
         cpuPct: z.number().min(0).max(100),
         memMb: z.number().min(0).max(10_000_000),
+        count: z.number().int().min(1).max(10_000).optional(), // processes sharing this name, summed by the agent
       })
       .strict(),
   )

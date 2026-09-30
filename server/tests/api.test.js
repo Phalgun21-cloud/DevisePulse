@@ -444,6 +444,18 @@ describe('diagnose command channel', () => {
     await agentPost(app, dev.deviceToken, created.body.id, { sample: { ...sampleBody, cpuPct: 400 } }).expect(400);
   });
 
+  it('accepts a grouped process count, but not a nonsense one', async () => {
+    const { app } = makeApp();
+    const jwt = await signup(app);
+    const dev = await addDevice(app, jwt);
+    const c1 = await userReq(app, jwt, 'post', `/api/devices/${dev.id}/diagnose`).expect(202);
+    const grouped = { ...sampleBody, topProcesses: [{ name: 'python.exe', cpuPct: 92.8, memMb: 96, count: 8 }] };
+    await agentPost(app, dev.deviceToken, c1.body.id, { sample: grouped }).expect(200);
+    const c2 = await userReq(app, jwt, 'post', `/api/devices/${dev.id}/diagnose`).expect(202);
+    const bad = { ...sampleBody, topProcesses: [{ name: 'python.exe', cpuPct: 1, memMb: 1, count: 0 }] };
+    await agentPost(app, dev.deviceToken, c2.body.id, { sample: bad }).expect(400);
+  });
+
   it('missing sensors stay null and produce no crash and no invented cause', async () => {
     const { app } = makeApp();
     const jwt = await signup(app);

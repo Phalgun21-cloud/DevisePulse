@@ -131,6 +131,11 @@ describe('diagnosis explanation', () => {
     for (const b of banned) expect(text).not.toMatch(b);
   });
 
+  it('names how many processes share the name when grouped', () => {
+    const r = run({ cpuPct: 100, topProcesses: [{ name: 'python.exe', cpuPct: 92.8, memMb: 96, count: 8 }] });
+    expect(explainDiagnosis(r)).toMatch(/python\.exe \(8 processes\) was the largest user \(92\.8% of CPU\)/);
+  });
+
   it('says so plainly when there is no clear cause', () => {
     expect(explainDiagnosis(run())).toMatch(/no clear cause/i);
   });

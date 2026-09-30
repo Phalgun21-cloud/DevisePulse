@@ -56,16 +56,33 @@ def _disk(io0, io1, elapsed_s: float) -> tuple[Optional[float], Optional[float]]
     return busy_pct, latency
 
 
+def group_by_name(processes: list[dict]) -> list[dict]:
+    """Pure. Sum processes that share a name (case-insensitive): 8 python.exe workers are one cause, not 8 small ones."""
+    groups: dict[str, dict] = {}
+    for p in processes:
+        key = p["name"].strip().lower()
+        if key in IDLE_NAMES:
+            continue
+        g = groups.setdefault(key, {"name": p["name"].strip()[:80], "cpuPct": 0.0, "memMb": 0.0, "count": 0})
+        g["cpuPct"] += p["cpuPct"]
+        g["memMb"] += p["memMb"]
+        g["count"] += 1
+    for g in groups.values():
+        g["cpuPct"] = round(min(100.0, g["cpuPct"]), 1)
+        g["memMb"] = round(g["memMb"], 1)
+    return list(groups.values())
+
+
 def pick_top_processes(processes: list[dict]) -> list[dict]:
-    """Pure. Top 3 by CPU, then the biggest memory users, at most 5, name/cpu/memory only."""
-    usable = [p for p in processes if p["name"].strip().lower() not in IDLE_NAMES]
+    """Pure. Group by name, then top 3 by CPU and the biggest memory users, at most 5."""
+    usable = group_by_name(processes)
     chosen: list[dict] = sorted(usable, key=lambda p: p["cpuPct"], reverse=True)[:TOP_BY_CPU]
     for p in sorted(usable, key=lambda p: p["memMb"], reverse=True):
         if len(chosen) >= TOP_N:
             break
         if p not in chosen:
             chosen.append(p)
-    return [{"name": p["name"][:80], "cpuPct": p["cpuPct"], "memMb": p["memMb"]} for p in chosen]
+    return chosen
 
 
 def build_diagnose_sample(

@@ -41,15 +41,19 @@ export function explainBattery(finding) {
   return parts.join(' ');
 }
 
+const procLabel = (name, count) => (count > 1 ? `${name} (${count} processes)` : name);
+
 const causeText = {
   cpu_saturated: (c) =>
     `The processor was ${c.evidence.cpuPct}% busy` +
-    (c.process ? `, and ${c.process} was the largest user (${c.evidence.topProcessCpuPct}% of CPU)` : '') +
+    (c.process
+      ? `, and ${procLabel(c.process, c.evidence.processCount)} was the largest user (${c.evidence.topProcessCpuPct}% of CPU)`
+      : '') +
     '. That is consistent with the slowdown.',
   memory_pressure: (c) =>
     `Memory was ${c.evidence.memUsedPct ?? 'heavily'}% used` +
     (c.evidence.swapActivityBytes > 0 ? ' and the system was paging to disk' : '') +
-    (c.process ? `; ${c.process} held the most (${c.evidence.topProcessMemMb} MB)` : '') +
+    (c.process ? `; ${procLabel(c.process, c.evidence.processCount)} held the most (${c.evidence.topProcessMemMb} MB)` : '') +
     '. Running short of memory may make everything feel slow.',
   disk_saturated: (c) =>
     `The disk was ${c.evidence.diskBusyPct ?? 'very'}% busy` +

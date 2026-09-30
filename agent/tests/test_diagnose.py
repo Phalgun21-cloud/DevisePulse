@@ -117,7 +117,7 @@ def test_top_processes_are_five_with_name_cpu_and_memory_only():
     procs = [proc(f"p{i}.exe", i, 100 + i) for i in range(10)]
     top = pick_top_processes(procs)
     assert len(top) == 5
-    assert all(set(p) == {"name", "cpuPct", "memMb"} for p in top)
+    assert all(set(p) == {"name", "cpuPct", "memMb", "count"} for p in top)
 
 
 def test_top_processes_include_a_memory_hog_that_is_not_busy():
@@ -130,6 +130,22 @@ def test_top_processes_include_a_memory_hog_that_is_not_busy():
 def test_idle_pseudo_process_is_dropped():
     procs = [proc("System Idle Process", 90, 0), proc("hog.py", 40, 50)]
     assert [p["name"] for p in pick_top_processes(procs)] == ["hog.py"]
+
+
+def test_processes_with_the_same_name_are_grouped_before_ranking():
+    # Real case from the task 2 gate: cpu_hog.py runs as 8 python.exe workers at about 11.6% each.
+    procs = [proc("python.exe", 11.6, 12) for _ in range(8)] + [proc("chrome.exe", 20.0, 900)]
+    top = pick_top_processes(procs)
+    assert top[0] == {"name": "python.exe", "cpuPct": 92.8, "memMb": 96.0, "count": 8}
+    assert top[1]["name"] == "chrome.exe" and top[1]["count"] == 1
+
+
+def test_grouping_ignores_case_and_caps_cpu_at_100():
+    procs = [proc("Chrome.exe", 60.0, 100), proc("chrome.exe", 55.0, 100)]
+    top = pick_top_processes(procs)
+    assert len(top) == 1
+    assert top[0]["cpuPct"] == 100.0
+    assert top[0]["count"] == 2
 
 
 def test_sample_contains_no_extra_keys():
