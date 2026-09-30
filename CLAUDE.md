@@ -61,6 +61,8 @@ python agent\probe.py --save
   `read_time`/`write_time` never advance). A latency of 0 is never sent. Swap activity is `null` on Windows.
 - The agent sends process NAMES only (top 5, with CPU % and memory MB), never command lines, paths or arguments.
   The server's diagnose schema is `.strict()` and rejects any extra field.
+- CPU frequency on Windows comes from the `% Processor Performance` counter (typeperf, built in, no admin), never
+  from psutil, whose value there is the fixed base clock. Counter unreadable -> `null`. Battery `CycleCount` 0 -> `null`.
 - Diagnose disk-latency baseline is the median of the device's own earlier completed diagnoses (at least 3);
   until then only the busy-percent half of the disk rule can fire.
 
@@ -97,7 +99,7 @@ Task 2 (slow-laptop diagnosis) DONE: command channel, 10 s sample, ranked causes
 
 ## Remaining tasks, in order (each ends with a gate)
 
-1. **Probe results.** Run the probe on every demo laptop, commit `docs/probe-results/*.json`. Gate: battery capacity reads on at least one laptop. Confirm the powercfg parser on real Windows.
+1. **Probe results.** (Gate met on 1 laptop, a Dell Inspiron 15 5510: powercfg capacity reads and the parser is confirmed; other demo laptops not probed yet.) Run the probe on every demo laptop, commit `docs/probe-results/*.json`. Gate: battery capacity reads on at least one laptop. Confirm the powercfg parser on real Windows.
 2. **DONE: Slow-laptop diagnosis.** Agent samples 10 s of CPU, memory, disk busy and top 5 processes. Add a command channel: server creates a pending diagnose request, agent polls `GET /api/agent/commands` every 15 s and posts the sample, page polls for ranked causes. Rules: CPU >= 85%, memory >= 90% or swap activity, disk busy > 80% or latency 3x baseline, throttling (frequency ratio < 0.75 at high load), else "no clear cause". Gate: unit tests, then `chaos/cpu_hog.py` on a real laptop names the hog process.
 3. **Storage health.** Tier A: `smartctl -j -a` (NVMe critical warning, spare at threshold, percentage used >= 80, media errors rising; SATA reallocated/pending sectors). Tier B: agent times an 8 MB write + fsync + read every 15 min, compare 24 h median with the device's own first-3-days baseline (3x). Free space < 10% Information, < 5% Watch. Wording never says the drive will fail. Gate: scenario rows for storage pass.
 4. **Thermal detector.** Temperature at similar load (20-point load buckets) versus first-7-day baseline, +10 C Watch; add frequency drop for Attention. Windows usually does not expose temperature or fans, so expect simulated data only and say so in the UI.

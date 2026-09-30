@@ -1,0 +1,52 @@
+{
+  "host": "Phalgun",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "python": "3.14.4",
+  "probedAt": "2026-09-30T07:43:15+00:00",
+  "signals": {
+    "cpu_load": {
+      "status": "available",
+      "detail": "21.1%"
+    },
+    "cpu_freq": {
+      "status": "available",
+      "detail": "Windows counter: 76% of base clock (psutil fixed at 2496 MHz, not used)"
+    },
+    "memory": {
+      "status": "available",
+      "detail": "83.0% used"
+    },
+    "disk_io": {
+      "status": "available",
+      "detail": "counters readable"
+    },
+    "battery_state": {
+      "status": "available",
+      "detail": "92%, plugged=True"
+    },
+    "cpu_temp": {
+      "status": "not_available",
+      "detail": "not exposed on this OS/laptop (expected on Windows)"
+    },
+    "fan_rpm": {
+      "status": "not_available",
+      "detail": "not exposed on this OS/laptop (expected on Windows)"
+    },
+    "battery_capacity": {
+      "status": "available",
+      "detail": "design 54.0 Wh, full 29.89 Wh, health 55.4%, cycles None"
+    },
+    "smart_storage": {
+      "status": "not_available",
+      "detail": "smartctl not installed (optional): install smartmontools for SMART data"
+    }
+  },
+  "ready": {
+    "battery_detector_live": true,
+    "root_cause_live": true,
+    "storage_tier": "B (latency probe)",
+    "thermal_live": "frequency only (no temperature: thermal rule uses simulator)",
+    "throttling_rule_live": true,
+    "disk_time_counters": "see docs/test-results.md (Windows counters did not advance on the first laptop)"
+  }
+}

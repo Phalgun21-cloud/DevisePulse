@@ -47,7 +47,8 @@ def parse_powercfg_xml(text: str) -> Optional[dict]:
             continue
         cycles = None
         raw_cycles = fields.get("CycleCount")
-        if raw_cycles and raw_cycles.isdigit():
+        # Firmware that does not track cycles reports 0 (seen on a Dell at 55% health): treat as unknown.
+        if raw_cycles and raw_cycles.isdigit() and int(raw_cycles) > 0:
             cycles = int(raw_cycles)
         return {
             "designWh": round(design_mwh / 1000.0, 2),

@@ -55,13 +55,58 @@ Design choices recorded: disk latency baseline is the median of the device's own
 at least 3 (`diagnose.baselineMinDiagnoses`); until then only the busy-percent part of the disk rule can fire.
 A diagnosis workers' process name shows as `python.exe`, because the agent sends names only (no command lines, rule 6).
 
+## Probe of the first real laptop (2026-09-30)
+
+Dell Inspiron 15 5510, Windows 11 (build 26200), Python 3.14, not elevated. Saved as `docs/probe-results/Phalgun.json`.
+
+| Signal | Status on this laptop | How |
+| --- | --- | --- |
+| CPU load, memory | available | psutil |
+| Battery capacity | **available**: design 54.0 Wh, full 29.89 Wh, health 55.4% | `powercfg /batteryreport /xml`, no admin needed |
+| Battery cycle count | not reported (firmware writes `0`) | now sent as `null`, see below |
+| Battery percent / plugged in | available | psutil |
+| CPU frequency | available via Windows counter only | `typeperf "\Processor Information(_Total)\% Processor Performance"`, no admin |
+| CPU temperature | **not available** | psutil: none; `Thermal Zone Information` counter: "No valid counters"; WMI `MSAcpi_ThermalZoneTemperature`: "Not supported" |
+| Fan speed | not available | psutil: none |
+| Disk busy / latency (psutil) | not usable | Windows `read_time`/`write_time` do not advance (task 2 finding) |
+| SMART | not available | smartctl not installed (nothing installed, per instructions) |
+
+**powercfg parser on real Windows: CONFIRMED.** The real XML (sanitised copy in `agent/tests/fixtures/powercfg_inspiron_5510.xml`)
+parses to 54.0 / 29.9 Wh. One bug found and fixed test-first: `<CycleCount>0</CycleCount>` was sent as 0 cycles on a
+battery at 55% health. A cycle count of 0 is now `null` (test `test_cycle_count_zero_means_not_reported_not_zero_cycles`,
+seen failing with `assert 0 is None` before the fix).
+
+**Real-hardware finding (drove a fix): psutil CPU frequency is a constant on Windows.** `psutil.cpu_freq()` gave
+current=2496, max=2496 both idle and with all 8 cores at 100%. The Windows `% Processor Performance` counter over the same
+load read 142-149% of base (turbo) and about 61-76% at idle. So every `cpuFreqMHz` sent before this change was the base clock
+presented as a measurement, and `cpuFreqRatio` was always 1.0, meaning the throttling rule could never fire on Windows.
+Now: on Windows the agent uses the counter (effective MHz = base x counter%, ratio = counter% / 100), and sends `null` if the
+counter cannot be read (it is a localised counter name, so non-English Windows will likely get `null`). psutil's value is never used on
+Windows. After the change, real readings: ratio 1.28 (1 s sample) and 1.40 (5 s diagnose window). 9 new tests in `test_system.py`,
+seen failing on import before the code existed.
+
+### Real vs Simulated, per detector, on this laptop
+
+| Detector | Data on this laptop | Why |
+| --- | --- | --- |
+| Battery wear + forecast | **Real** (needs 14 days of readings before any forecast) | powercfg capacity reads |
+| Slow-laptop diagnosis: CPU, memory % | **Real** | psutil |
+| Diagnosis: throttling | **Real** (from this change on) | Windows performance counter |
+| Diagnosis: swap activity | Not available (rule uses memory % only) | psutil cannot measure paging on Windows |
+| Diagnosis: disk busy / latency | Not available from psutil; task 3's timed probe is the replacement | time counters frozen |
+| Storage Tier A (SMART) | **Simulated / fixtures only** | smartctl not installed |
+| Storage Tier B (timed write/read) | Real once built (task 3) | needs only a temp file |
+| Thermal (temperature at same load) | **Simulated only** | no temperature source |
+| Thermal fallback (frequency drop under load) | Real frequency available | Windows performance counter |
+
 ## Also verified by hand
 - Real server + real agent, one upload: sample stored, missing CPU temperature kept as null (not zero).
 - Wrong device token: server answers 401, agent keeps the sample buffered.
 - Mutation check: deliberately breaking (a) the device ownership check, (b) the two-detection rule, (c) duplicate protection made the suite fail each time; code restored afterwards.
 
 ## NOT yet run (do not claim these)
-- `python agent/probe.py --save` and the `powercfg` battery parser on real Windows (task 2 itself did run on Windows 11).
+- Probe on any laptop other than the Dell Inspiron 15 5510 (task 1 asks for every demo laptop).
+- The throttling rule against a laptop that actually throttles (only the counter reading was verified, not a throttle event).
 - Task 2: memory, throttling and disk-busy rules against real load (unit-tested only; no mem_hog/disk_hog yet). Request expiry was tested only in Vitest, not by waiting 10 minutes on the real agent.
 - Storage and thermal detectors: not built yet.
 - Real-device fault injection (chaos/), 48-hour soak, web dashboard, end-to-end browser test.

@@ -53,12 +53,23 @@ def probe_psutil() -> dict:
     out["cpu_load"] = _result(AVAILABLE, f"{psutil.cpu_percent(interval=0.5)}%")
 
     try:
+        from collectors.system import read_perf_pct
+
         freq = psutil.cpu_freq()
-        out["cpu_freq"] = (
-            _result(AVAILABLE, f"{freq.current:.0f} MHz (max {freq.max:.0f})")
-            if freq
-            else _result(NOT_AVAILABLE)
-        )
+        if sys.platform == "win32":
+            # psutil reports the fixed base clock on Windows; the performance counter is the real speed.
+            pct = read_perf_pct(2)
+            out["cpu_freq"] = (
+                _result(AVAILABLE, f"Windows counter: {pct:.0f}% of base clock (psutil fixed at {freq.current:.0f} MHz, not used)")
+                if pct is not None
+                else _result(NOT_AVAILABLE, "'% Processor Performance' counter unreadable; psutil value is a fixed base clock")
+            )
+        else:
+            out["cpu_freq"] = (
+                _result(AVAILABLE, f"{freq.current:.0f} MHz (max {freq.max:.0f})")
+                if freq
+                else _result(NOT_AVAILABLE)
+            )
     except Exception as exc:  # noqa: BLE001
         out["cpu_freq"] = _result(NOT_AVAILABLE, str(exc))
 
@@ -153,8 +164,15 @@ def run_probe() -> dict:
         "storage_tier": (
             "A (SMART)" if signals["smart_storage"]["status"] == AVAILABLE else "B (latency probe)"
         ),
-        "thermal_live": signals["cpu_temp"]["status"] == AVAILABLE
-        or signals["cpu_freq"]["status"] == AVAILABLE,
+        "thermal_live": (
+            "temperature"
+            if signals["cpu_temp"]["status"] == AVAILABLE
+            else "frequency only (no temperature: thermal rule uses simulator)"
+            if signals["cpu_freq"]["status"] == AVAILABLE
+            else "no (simulator only)"
+        ),
+        "throttling_rule_live": signals["cpu_freq"]["status"] == AVAILABLE,
+        "disk_time_counters": "see docs/test-results.md (Windows counters did not advance on the first laptop)",
     }
 
     return {

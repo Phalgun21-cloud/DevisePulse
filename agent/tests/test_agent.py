@@ -39,6 +39,22 @@ def test_parse_powercfg_xml_handles_missing_cycle_count():
     assert got["fullChargeWh"] == 46.0
 
 
+REAL_XML_PATH = os.path.join(os.path.dirname(__file__), "fixtures", "powercfg_inspiron_5510.xml")
+
+
+def test_parse_real_powercfg_xml_from_windows_11_laptop():
+    with open(REAL_XML_PATH, encoding="utf-8") as fh:
+        got = parse_powercfg_xml(fh.read())
+    assert got["designWh"] == 54.0
+    assert abs(got["fullChargeWh"] - 29.9) < 0.01
+
+
+def test_cycle_count_zero_means_not_reported_not_zero_cycles():
+    # Real Dell firmware reports <CycleCount>0</CycleCount> on a battery at 55% health.
+    with open(REAL_XML_PATH, encoding="utf-8") as fh:
+        assert parse_powercfg_xml(fh.read())["cycles"] is None
+
+
 def test_parse_powercfg_xml_returns_none_for_garbage():
     assert parse_powercfg_xml("not xml at all") is None
     assert parse_powercfg_xml("<BatteryReport/>") is None

@@ -7,13 +7,16 @@ take_sample() is the part that talks to the OS through psutil.
 
 from __future__ import annotations
 
+import subprocess
 import sys
 import time
+from types import SimpleNamespace
 from typing import Optional
+
+from collectors.system import freq_fields, parse_typeperf_csv, typeperf_command
 
 TOP_N = 5
 TOP_BY_CPU = 3  # the rest of the slots go to the biggest memory users not already listed
-MAX_FREQ_RATIO = 1.5  # turbo can read above "max"; keep the number sane
 MIN_OPS_TO_TRUST_ZERO = 20  # below this, zero time spent on disk is believable
 IDLE_NAMES = {"system idle process", "idle"}
 
@@ -78,6 +81,7 @@ def build_diagnose_sample(
     freq_max: Optional[float],
     processes: list[dict],
     is_windows: bool,
+    perf_pct: Optional[float] = None,
 ) -> dict:
     """Pure. Missing readings stay None; nothing is ever filled in with zero."""
     busy_pct, latency_ms = _disk(io0, io1, elapsed_s)
@@ -89,9 +93,8 @@ def build_diagnose_sample(
         if d_in is not None and d_out is not None:
             swap_bytes = d_in + d_out
 
-    freq_ratio: Optional[float] = None
-    if freq_current and freq_max:  # psutil gives 0 when it does not know
-        freq_ratio = round(min(freq_current / freq_max, MAX_FREQ_RATIO), 2)
+    psutil_freq = None if freq_current is None else SimpleNamespace(current=freq_current, max=freq_max)
+    freq_ratio = freq_fields(is_windows, psutil_freq, perf_pct)["cpuFreqRatio"]
 
     return {
         "cpuPct": None if cpu_pct is None else round(float(cpu_pct), 1),
@@ -131,6 +134,17 @@ def take_sample(duration_s: float = 10.0) -> dict:
         except Exception:  # noqa: BLE001
             return None
 
+    is_windows = sys.platform == "win32"
+    perf_proc = None
+    if is_windows:  # effective CPU speed, sampled across the same window (psutil's is a fixed number there)
+        try:
+            perf_proc = subprocess.Popen(
+                typeperf_command(max(1, int(duration_s) - 1)),
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+            )
+        except OSError:
+            perf_proc = None
+
     io0, swap0 = disk_counters(), swap_counters()
     psutil.cpu_percent(None)
     start = time.monotonic()
@@ -138,6 +152,15 @@ def take_sample(duration_s: float = 10.0) -> dict:
     elapsed = time.monotonic() - start
     cpu_pct = psutil.cpu_percent(None)
     io1, swap1 = disk_counters(), swap_counters()
+
+    perf_pct = None
+    if perf_proc is not None:
+        try:
+            out, _ = perf_proc.communicate(timeout=10)
+            perf_pct = parse_typeperf_csv(out) if perf_proc.returncode == 0 else None
+        except subprocess.TimeoutExpired:
+            perf_proc.kill()
+            perf_proc.communicate()
 
     try:
         mem_pct = psutil.virtual_memory().percent
@@ -177,5 +200,6 @@ def take_sample(duration_s: float = 10.0) -> dict:
         freq_current=freq_cur,
         freq_max=freq_max,
         processes=rows,
-        is_windows=sys.platform == "win32",
+        is_windows=is_windows,
+        perf_pct=perf_pct,
     )
