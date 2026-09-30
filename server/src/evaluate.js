@@ -6,6 +6,7 @@
 
 import { detectBattery } from './detectors/battery.js';
 import { detectStorage, STORAGE_RULES } from './detectors/storage.js';
+import { detectThermal } from './detectors/thermal.js';
 import { explainFinding } from './explain/templates.js';
 
 export function loadBatterySamples(db, deviceId) {
@@ -82,6 +83,38 @@ export function loadStorageSamples(db, deviceId, settings, now) {
     )
     .all(deviceId, baseEnd, since)
     .map((r) => ({ ts: r.ts, ...JSON.parse(r.v) }));
+}
+
+// CPU samples for the thermal baseline week plus the recent window.
+export function loadCpuSamples(db, deviceId, settings, now) {
+  const first = db.prepare(`SELECT MIN(ts) AS ts FROM samples WHERE device_id = ? AND kind = 'cpu'`).get(deviceId)?.ts;
+  if (!first) return [];
+  const baseEnd = new Date(Date.parse(first) + settings.thermal.baselineDays * DAY_MS).toISOString();
+  const since = new Date(now.getTime() - settings.thermal.recentHours * 3_600_000).toISOString();
+  return db
+    .prepare(
+      `SELECT ts, "values" AS v FROM samples
+       WHERE device_id = ? AND kind = 'cpu' AND (ts < ? OR (ts >= ? AND ts <= ?)) ORDER BY ts`,
+    )
+    .all(deviceId, baseEnd, since, now.toISOString())
+    .map((r) => ({ ts: r.ts, ...JSON.parse(r.v) }));
+}
+
+// CPU samples arrive every minute; the thermal trend runs at most once per `evaluateEveryMinutes` of DATA time
+// (so a backlog uploaded after a network outage is judged at the times it was measured). Returns whether it ran.
+export function evaluateThermalIfDue(db, deviceId, settings, dataNow) {
+  const last = db.prepare(`SELECT last_ts FROM evaluations WHERE device_id = ? AND detector = 'thermal'`).get(deviceId);
+  if (last && dataNow.getTime() - Date.parse(last.last_ts) < settings.thermal.evaluateEveryMinutes * 60_000) return false;
+  db.prepare(
+    `INSERT INTO evaluations (device_id, detector, last_ts) VALUES (?, 'thermal', ?)
+     ON CONFLICT (device_id, detector) DO UPDATE SET last_ts = excluded.last_ts`,
+  ).run(deviceId, dataNow.toISOString());
+  const result = detectThermal(loadCpuSamples(db, deviceId, settings, dataNow), settings, dataNow);
+  // Only a real comparison is a check: "collecting baseline" or "no comparable load" neither confirms nor clears.
+  if (result.status === 'ok') {
+    syncRule(db, deviceId, 'thermal', result.findings[0] ?? null, settings.findings, dataNow.toISOString());
+  }
+  return true;
 }
 
 export function evaluateStorage(db, deviceId, settings, now = new Date()) {

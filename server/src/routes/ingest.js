@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { evaluateBattery, evaluateStorage } from '../evaluate.js';
+import { evaluateBattery, evaluateStorage, evaluateThermalIfDue } from '../evaluate.js';
 
 const scalar = z.union([z.number(), z.string().max(200), z.boolean(), z.null()]);
 const DAY_MS = 86_400_000;
@@ -52,6 +52,7 @@ export function ingestRoutes({ db, settings, now }) {
     let stored = 0;
     let newBattery = 0;
     let newStorage = 0;
+    let latestCpuTs = null;
     db.exec('BEGIN');
     try {
       for (const s of samples) {
@@ -60,6 +61,7 @@ export function ingestRoutes({ db, settings, now }) {
           stored += 1;
           if (s.kind === 'battery') newBattery += 1;
           if (s.kind === 'storage') newStorage += 1;
+          if (s.kind === 'cpu' && (!latestCpuTs || s.ts > latestCpuTs)) latestCpuTs = s.ts;
         }
       }
       db.prepare('UPDATE devices SET last_seen = ? WHERE id = ?').run(clock.toISOString(), req.device.id);
@@ -73,6 +75,7 @@ export function ingestRoutes({ db, settings, now }) {
     // detections" means two battery readings apart, not two one-minute CPU samples.
     if (newBattery > 0) evaluateBattery(db, req.device.id, settings, clock);
     if (newStorage > 0) evaluateStorage(db, req.device.id, settings, clock);
+    if (latestCpuTs) evaluateThermalIfDue(db, req.device.id, settings, new Date(latestCpuTs));
 
     res.json({ received: samples.length, stored, duplicates: samples.length - stored });
   });

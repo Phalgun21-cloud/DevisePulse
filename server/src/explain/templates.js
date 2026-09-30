@@ -131,8 +131,35 @@ export function explainStorage(finding) {
   }
 }
 
+export function explainThermal(finding) {
+  const e = finding.evidence;
+  if (e.basis === 'frequency') {
+    return (
+      `Under sustained heavy load the processor now runs about ${e.freqDropPct}% slower than in its first week ` +
+      `(${e.exampleRecentRatio}x versus ${e.exampleBaselineRatio}x its base speed). Temperature is not available on this ` +
+      'device, so the cause cannot be confirmed; this is consistent with the processor slowing itself down because of ' +
+      'heat, or with a changed power setting. Steps: check the power mode, clean the air vents and avoid soft surfaces.'
+    );
+  }
+  const parts = [
+    `The processor is running hotter than it used to at similar load: about ${e.exampleRecentC} °C at ` +
+      `${e.exampleBand} load, compared with ${e.exampleBaselineC} °C in its first week (about ${e.tempRiseC} °C warmer overall).`,
+  ];
+  if (finding.severity === 'Attention' && e.freqDropPct !== null) {
+    parts.push(
+      `It is also about ${e.freqDropPct}% slower under heavy load, which may mean it is slowing itself down to stay cool.`,
+    );
+  }
+  parts.push(
+    'This is consistent with dust in the vents, a weaker fan or dried thermal paste. ' +
+      'Steps: clean the air vents, use it on a hard flat surface, and have the fan checked if it stays hot.',
+  );
+  return parts.join(' ');
+}
+
 export function explainFinding(finding) {
   if (finding.component === 'storage') return explainStorage(finding);
+  if (finding.component === 'thermal') return explainThermal(finding);
   switch (finding.rule) {
     case 'battery_wear':
       return explainBattery(finding);

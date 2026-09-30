@@ -8,6 +8,7 @@ const createDevice = z.object({
   model: z.string().trim().max(120).optional(),
   os: z.string().trim().max(120).optional(),
   bios: z.string().trim().max(120).optional(),
+  simulated: z.boolean().optional(), // a simulator-fed demo device; everything it shows is labelled Simulated
 });
 
 const severityRank = { Watch: 1, Attention: 2, Urgent: 3 };
@@ -22,8 +23,9 @@ const publicDevice = (d) => ({
   isSimulated: !!d.is_simulated,
 });
 
-const publicFinding = (f) => ({
+const publicFinding = (f, device) => ({
   id: f.id,
+  data: device.is_simulated ? 'Simulated' : 'Real', // rule 5: never present simulated data as measured
   rule: f.rule,
   component: f.component,
   severity: f.severity,
@@ -57,10 +59,19 @@ export function deviceRoutes({ db, settings, now }) {
     const token = newDeviceToken();
     const info = db
       .prepare(
-        `INSERT INTO devices (user_id, name, model, os, bios, token_hash, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO devices (user_id, name, model, os, bios, token_hash, is_simulated, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(req.user.id, body.name, body.model ?? null, body.os ?? null, body.bios ?? null, hashToken(token), new Date().toISOString());
+      .run(
+        req.user.id,
+        body.name,
+        body.model ?? null,
+        body.os ?? null,
+        body.bios ?? null,
+        hashToken(token),
+        body.simulated ? 1 : 0,
+        new Date().toISOString(),
+      );
     // The token is shown once and never stored in plain text.
     res.status(201).json({ id: Number(info.lastInsertRowid), name: body.name, deviceToken: token });
   });
@@ -86,7 +97,7 @@ export function deviceRoutes({ db, settings, now }) {
         `SELECT * FROM findings WHERE device_id = ? ${all ? '' : `AND status = 'active'`} ORDER BY last_seen DESC`,
       )
       .all(device.id);
-    res.json({ findings: rows.map(publicFinding) });
+    res.json({ findings: rows.map((f) => publicFinding(f, device)) });
   });
 
   r.get('/:id/samples', (req, res) => {

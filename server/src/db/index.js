@@ -64,6 +64,14 @@ CREATE TABLE IF NOT EXISTS diagnose_requests (
   result TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_diagnose_device ON diagnose_requests (device_id, status);
+
+-- When a periodic detector last ran for a device (data time), so minute-level samples do not re-run it.
+CREATE TABLE IF NOT EXISTS evaluations (
+  device_id INTEGER NOT NULL REFERENCES devices(id),
+  detector TEXT NOT NULL,
+  last_ts TEXT NOT NULL,
+  PRIMARY KEY (device_id, detector)
+);
 `;
 
 export function openDb(file = ':memory:') {

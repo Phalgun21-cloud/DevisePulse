@@ -82,6 +82,12 @@ def freq_fields(is_windows: bool, psutil_freq, perf_pct: Optional[float]) -> dic
     return {"cpuFreqMHz": round(float(current), 0), "cpuFreqRatio": ratio}
 
 
+def plugged_in(battery) -> Optional[bool]:
+    """Pure. True/False from psutil.sensors_battery(); None when unknown (no battery reported)."""
+    value = getattr(battery, "power_plugged", None) if battery is not None else None
+    return value if isinstance(value, bool) else None
+
+
 def read_system() -> dict:
     import psutil
 
@@ -121,7 +127,13 @@ def read_system() -> dict:
     except Exception:
         pass
 
+    try:
+        power = plugged_in(psutil.sensors_battery())
+    except Exception:
+        power = None
+
     return {
+        "pluggedIn": power,  # unplugged laptops slow their clocks on purpose; thermal compares like with like
         "cpuLoadPct": round(float(cpu_load), 1),
         "cpuFreqMHz": freq["cpuFreqMHz"],
         "cpuFreqRatio": freq["cpuFreqRatio"],

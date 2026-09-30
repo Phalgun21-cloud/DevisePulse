@@ -181,3 +181,64 @@ export const storageScenarios = {
       seed,
     }),
 };
+
+// ---- CPU / thermal --------------------------------------------------------------------
+
+/**
+ * Build one-per-`everyMin` CPU samples with a school-day load pattern and a 90-minute heavy job at 14:00.
+ * tempC = 38 + 0.42 x load (+ offsets), freq ratio = 0.65 + 0.007 x load (Windows counter style: 1.35 at full load).
+ * Options change the device from day `changeDay` on. tempC: false -> cpuTempC is null throughout (Windows-like).
+ */
+export function cpuSeries({
+  startIso = '2026-01-01T00:00:00Z',
+  days,
+  everyMin = 5,
+  changeDay = Infinity,
+  extraLoad = 0, // "busier": added load after changeDay
+  tempOffsetC = 0, // "hotter at the same load" after changeDay
+  highLoadFreqFactor = 1, // frequency multiplier at load >= 60 after changeDay
+  onBatteryAfterChange = false, // unplugged after changeDay: slower clocks and cooler, by design
+  tempC = true,
+  freq = true,
+  seed = 51,
+}) {
+  const rand = mulberry32(seed);
+  const start = Date.parse(startIso);
+  const out = [];
+  for (let m = 0; m < days * 1440; m += everyMin) {
+    const day = m / 1440;
+    const hour = (m % 1440) / 60;
+    const changed = day >= changeDay;
+    let load;
+    if (hour >= 14 && hour < 15.5) load = 95 + gauss(rand) * 2;
+    else if (hour >= 9 && hour < 17) load = 40 + 20 * Math.sin((hour - 9) * 0.8) + gauss(rand) * 8;
+    else load = 6 + gauss(rand) * 2;
+    if (changed) load += extraLoad; // busier all day (e.g. a background sync that never stops)
+    load = Math.min(100, Math.max(0, load));
+    const battery = changed && onBatteryAfterChange;
+    let t = 38 + 0.42 * load + gauss(rand) * 1.5 + (changed ? tempOffsetC : 0) - (battery ? 4 : 0);
+    let r = 0.65 + 0.007 * load + gauss(rand) * 0.02;
+    if (changed && load >= 60) r *= highLoadFreqFactor;
+    if (battery) r *= 0.7;
+    out.push({
+      ts: new Date(start + m * 60_000).toISOString(),
+      cpuLoadPct: Math.round(load * 10) / 10,
+      cpuTempC: tempC ? Math.round(t * 10) / 10 : null,
+      cpuFreqRatio: freq ? Math.round(r * 100) / 100 : null,
+      pluggedIn: !battery,
+    });
+  }
+  return out;
+}
+
+export const thermalScenarios = {
+  healthy: (seed = 61) => cpuSeries({ days: 14, seed }),
+  hotterSameLoad: (seed = 62) => cpuSeries({ days: 14, changeDay: 10, tempOffsetC: 12, seed }),
+  hotterWithFreqDrop: (seed = 63) =>
+    cpuSeries({ days: 14, changeDay: 10, tempOffsetC: 12, highLoadFreqFactor: 0.8, seed }),
+  hotterBecauseBusier: (seed = 64) => cpuSeries({ days: 14, changeDay: 10, extraLoad: 30, seed }),
+  noTempFreqDrop: (seed = 65) => cpuSeries({ days: 14, changeDay: 10, tempC: false, highLoadFreqFactor: 0.75, seed }),
+  noTempNoChange: (seed = 66) => cpuSeries({ days: 14, tempC: false, seed }),
+  onBattery: (seed = 67) => cpuSeries({ days: 14, changeDay: 10, onBatteryAfterChange: true, tempC: false, seed }),
+  nothingExposed: (seed = 68) => cpuSeries({ days: 14, tempC: false, freq: false, seed }),
+};

@@ -133,3 +133,18 @@ def test_diagnose_sample_on_windows_never_uses_psutil_disk_time():
     assert build_diagnose_sample(**base)["diskBusyPct"] is None
     got = build_diagnose_sample(**base, windows_disk=(55.0, 2.5))
     assert got["diskBusyPct"] == 55.0 and got["diskLatencyMs"] == 2.5
+
+
+# ---- power state (thermal compares mains with mains, battery with battery) ---------------
+
+from collectors.system import plugged_in  # noqa: E402
+
+
+def test_plugged_in_from_psutil_battery():
+    assert plugged_in(NS(percent=80.0, power_plugged=True)) is True
+    assert plugged_in(NS(percent=80.0, power_plugged=False)) is False
+
+
+def test_plugged_in_unknown_is_none_not_false():
+    assert plugged_in(None) is None  # desktop / no battery reported
+    assert plugged_in(NS(percent=80.0, power_plugged=None)) is None

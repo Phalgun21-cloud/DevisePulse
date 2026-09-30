@@ -165,6 +165,45 @@ storage sample with all SMART fields `null`; no finding (baseline needs 3 days, 
 **Tier A (SMART) is fixtures only:** smartctl is not installed and nothing was installed. The two fixtures
 (`agent/tests/fixtures/smartctl_nvme.json`, `smartctl_sata.json`) are HAND-WRITTEN in smartmontools' JSON shape, not captured.
 
+## Task 4: thermal detector, 2026-09-30
+
+**On this laptop the thermal detector runs on simulated data only for temperature:** Windows exposes no CPU temperature
+here (psutil none, thermal-zone counter "No valid counters", WMI "Not supported"). The frequency fallback has real input
+(Windows `% Processor Performance` counter) but has not produced a finding on real hardware. Findings from simulator-fed
+devices carry `data: "Simulated"` in the API (devices can be created with `simulated: true`); real devices carry `data: "Real"`.
+
+Built: `server/src/detectors/thermal.js`, `evaluateThermalIfDue` (at most hourly, by data time; last run kept in a new
+`evaluations` table), thermal explanations, `thermal` settings block, seeded `cpuSeries` / `thermalScenarios` in the simulator,
+agent sends `pluggedIn` with every CPU sample. Tests: **server 125 passed (125)** (19 new in `thermal.test.js`),
+**agent 82 passed**. `thermal.test.js` failed on the missing module before the code existed.
+
+| Scenario | Result |
+| --- | --- |
+| Healthy, days 8-14 | no thermal finding |
+| +12 C at the same load from day 10 | Watch (rise 10-14 C at like load), basis temperature |
+| +12 C and 20% frequency drop at load >= 60% | Attention, never Urgent |
+| Hotter because busier (whole-day mean rose more than 10 C) | no finding (compared within 20-point load bands) |
+| No temperature, 25% frequency drop under sustained load > 80% | Watch, basis frequency |
+| No temperature, 50% drop | still Watch (one signal never above Watch) |
+| No temperature, no change / unplugged after day 10 | no finding |
+| No temperature and no frequency / no samples | rule skipped, no crash |
+| Before 7 days of baseline | collecting_baseline, no finding |
+| API replay into a simulated device | active Attention with `data: "Simulated"` |
+
+**Mutation check** (each broke at least one test; code restored, 19/19 again): no load bands -> 3 failed (incl. busier);
+frequency alone allowed to Attention -> 1 failed; power state ignored -> the on-battery test failed; thermal on every CPU
+sample -> the hourly test failed.
+
+Design choices (mine, recorded): frequency drop that confirms a temperature rise needs 10% (`freqDropWithHeatPct`); frequency
+alone needs 20% (`freqDropAlonePct`, from the plan). Temperature change is the recent-sample-weighted mean of per-band medians.
+Only like power states are compared, because an unplugged laptop is slower by design (would otherwise be a false alarm).
+Test data change, not a threshold change: the first "hotter because busier" scenario only warmed the laptop 6.1 C overall,
+which would not have tripped even a naive detector; it was made busier all day so the trap is real (> 10 C overall).
+
+**Flaky run seen once, not reproduced:** one full `npm test` right after the thermal mutation check reported
+"Test Files 4 passed (5), Tests 97 passed (125)" and an unhandled-error warning. The output was cut off before the error
+itself, so the cause is unknown. Six immediate reruns of the full server suite all gave 125 passed (125). Not fixed; watch for it.
+
 ## Also verified by hand
 - Real server + real agent, one upload: sample stored, missing CPU temperature kept as null (not zero).
 - Wrong device token: server answers 401, agent keeps the sample buffered.
@@ -176,7 +215,8 @@ storage sample with all SMART fields `null`; no finding (baseline needs 3 days, 
 - Task 2: disk_saturated firing on real hardware (this NVMe could not be saturated), and the throttling rule firing (no throttle event produced). Request expiry was tested only in Vitest, not by waiting 10 minutes on the real agent.
 - Storage Tier A on a real drive: the smartctl parser has only seen hand-written fixtures. Needs smartctl (and usually Administrator) on a demo laptop.
 - Storage Tier B over days on a real laptop: the 3-day baseline, the 24 h median and a real slow-disk finding have only run on simulated data.
-- Thermal detector: not built yet.
+- Thermal on real hardware: no temperature exists on the first laptop; the frequency fallback has never fired on a real device.
+- The unhandled-error flake seen once in the full server suite (see Task 4).
 - Real-device fault injection (chaos/), 48-hour soak, web dashboard, end-to-end browser test.
 - Scenario accuracy over 200 healthy simulated devices (only the battery scenarios exist so far).
 
