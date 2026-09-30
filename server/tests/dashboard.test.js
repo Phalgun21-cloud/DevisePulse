@@ -63,6 +63,29 @@ describe('device detail summary', () => {
   });
 });
 
+describe('device settings', () => {
+  it('renames a device, and deleting it removes its data and revokes its agent token', async () => {
+    const { app, db } = makeApp();
+    const jwt = await signup(app);
+    const dev = (await request(app).post('/api/devices').set(auth(jwt)).send({ name: 'old' })).body;
+    await request(app)
+      .post('/api/ingest')
+      .set('Authorization', `Bearer ${dev.deviceToken}`)
+      .send({ samples: [{ ts: '2026-07-04T10:00:00Z', kind: 'storage', values: { ioProbeMs: 20, freeSpacePct: 4 } }] })
+      .expect(200);
+    const renamed = await request(app).patch(`/api/devices/${dev.id}`).set(auth(jwt)).send({ name: 'Library 4', model: 'Dell' }).expect(200);
+    expect(renamed.body.device).toMatchObject({ name: 'Library 4', model: 'Dell' });
+    await request(app).patch(`/api/devices/${dev.id}`).set(auth(jwt)).send({ token_hash: 'x' }).expect(400);
+
+    const other = await signup(app, 'other@example.com');
+    await request(app).delete(`/api/devices/${dev.id}`).set(auth(other)).expect(404);
+    await request(app).delete(`/api/devices/${dev.id}`).set(auth(jwt)).expect(204);
+    expect(db.prepare('SELECT COUNT(*) AS n FROM samples').get().n).toBe(0);
+    await request(app).post('/api/ingest').set('Authorization', `Bearer ${dev.deviceToken}`)
+      .send({ samples: [{ ts: '2026-07-04T11:00:00Z', kind: 'storage', values: { ioProbeMs: 20 } }] }).expect(401);
+  });
+});
+
 describe('diagnose history', () => {
   it('lists this device\'s requests, newest first', async () => {
     const { app } = makeApp();

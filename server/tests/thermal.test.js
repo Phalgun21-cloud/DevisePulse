@@ -125,13 +125,12 @@ describe('thermal explanations', () => {
 // ---- lifecycle and API --------------------------------------------------------------
 
 describe('thermal lifecycle', () => {
-  it('runs at most once per hour of data, not on every CPU sample', () => {
+  it('runs at most once per hour of data, not on every CPU sample', async () => {
     const db = openDb(':memory:');
     db.prepare(`INSERT INTO users (email, password_hash, created_at) VALUES ('t@example.com', 'x', '2026-01-01')`).run();
     db.prepare(`INSERT INTO devices (user_id, name, token_hash, created_at) VALUES (1, 'x', 'h', '2026-01-01')`).run();
-    const ran = [0, 5, 30, 59, 60, 61, 125].map((min) =>
-      evaluateThermalIfDue(db, 1, defaultSettings, new Date(START + min * 60_000)),
-    );
+    const ran = [];
+    for (const min of [0, 5, 30, 59, 60, 61, 125]) ran.push(await evaluateThermalIfDue(db, 1, defaultSettings, new Date(START + min * 60_000)));
     expect(ran).toEqual([true, false, false, false, true, false, true]);
   });
 });

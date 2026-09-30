@@ -3,20 +3,20 @@
 const MIN_MS = 60_000;
 
 // Requests nobody collected or finished must not hang the page forever.
-export function expireStale(db, deviceId, settings, clock) {
+export async function expireStale(db, deviceId, settings, clock) {
   const cutoff = new Date(clock.getTime() - settings.diagnose.requestExpiryMinutes * MIN_MS).toISOString();
-  db.prepare(
+  await db.run(
     `UPDATE diagnose_requests SET status = 'expired'
      WHERE device_id = ? AND status IN ('pending', 'running') AND created_at < ?`,
-  ).run(deviceId, cutoff);
+    deviceId,
+    cutoff,
+  );
 }
 
 // The device's own "normal" disk latency: median of its earlier completed diagnoses.
 // Null until there are enough of them, which makes the latency rule skip rather than guess.
-export function baselineFor(db, deviceId, settings) {
-  const rows = db
-    .prepare(`SELECT sample FROM diagnose_requests WHERE device_id = ? AND status = 'done' ORDER BY id`)
-    .all(deviceId);
+export async function baselineFor(db, deviceId, settings) {
+  const rows = await db.all(`SELECT sample FROM diagnose_requests WHERE device_id = ? AND status = 'done' ORDER BY id`, deviceId);
   const latencies = rows
     .map((r) => JSON.parse(r.sample).diskLatencyMs)
     .filter((v) => typeof v === 'number')

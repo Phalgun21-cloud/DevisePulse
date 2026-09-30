@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { evaluateBattery, evaluateStorage, evaluateThermalIfDue } from '../evaluate.js';
+import { wrap } from '../middleware/auth.js';
 
 const scalar = z.union([z.number(), z.string().max(200), z.boolean(), z.null()]);
 const DAY_MS = 86_400_000;
@@ -36,7 +37,7 @@ const body = z.object({ samples: z.array(sample).min(1).max(200) });
 export function ingestRoutes({ db, settings, now }) {
   const r = Router();
 
-  r.post('/', (req, res) => {
+  r.post('/', wrap(async (req, res) => {
     const { samples } = body.parse(req.body);
     const clock = now();
 
@@ -46,17 +47,19 @@ export function ingestRoutes({ db, settings, now }) {
       return res.status(400).json({ error: 'timestamp_in_future' });
     }
 
-    const insert = db.prepare(
-      'INSERT OR IGNORE INTO samples (device_id, ts, kind, "values") VALUES (?, ?, ?, ?)',
-    );
     let stored = 0;
     let newBattery = 0;
     let newStorage = 0;
     let latestCpuTs = null;
-    db.exec('BEGIN');
-    try {
+    await db.tx(async (t) => {
       for (const s of samples) {
-        const info = insert.run(req.device.id, s.ts, s.kind, JSON.stringify(s.values));
+        const info = await t.run(
+          'INSERT OR IGNORE INTO samples (device_id, ts, kind, vals) VALUES (?, ?, ?, ?)',
+          req.device.id,
+          s.ts,
+          s.kind,
+          JSON.stringify(s.values),
+        );
         if (info.changes > 0) {
           stored += 1;
           if (s.kind === 'battery') newBattery += 1;
@@ -64,21 +67,17 @@ export function ingestRoutes({ db, settings, now }) {
           if (s.kind === 'cpu' && (!latestCpuTs || s.ts > latestCpuTs)) latestCpuTs = s.ts;
         }
       }
-      db.prepare('UPDATE devices SET last_seen = ? WHERE id = ?').run(clock.toISOString(), req.device.id);
-      db.exec('COMMIT');
-    } catch (err) {
-      db.exec('ROLLBACK');
-      throw err;
-    }
+      await t.run('UPDATE devices SET last_seen = ? WHERE id = ?', clock.toISOString(), req.device.id);
+    });
 
     // Trend detectors run only when a new battery reading arrived, so "two consecutive
     // detections" means two battery readings apart, not two one-minute CPU samples.
-    if (newBattery > 0) evaluateBattery(db, req.device.id, settings, clock);
-    if (newStorage > 0) evaluateStorage(db, req.device.id, settings, clock);
-    if (latestCpuTs) evaluateThermalIfDue(db, req.device.id, settings, new Date(latestCpuTs));
+    if (newBattery > 0) await evaluateBattery(db, req.device.id, settings, clock);
+    if (newStorage > 0) await evaluateStorage(db, req.device.id, settings, clock);
+    if (latestCpuTs) await evaluateThermalIfDue(db, req.device.id, settings, new Date(latestCpuTs));
 
     res.json({ received: samples.length, stored, duplicates: samples.length - stored });
-  });
+  }));
 
   return r;
 }

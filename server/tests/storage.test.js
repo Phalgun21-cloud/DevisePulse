@@ -106,10 +106,10 @@ describe('scenario: slow disk, one-hour spike', () => {
     }
   });
 
-  it('no active finding through the real lifecycle either', () => {
+  it('no active finding through the real lifecycle either', async () => {
     const db = openDb(':memory:');
     const deviceId = seedDevice(db);
-    replay(db, deviceId, storageScenarios.oneHourSpike());
+    await replay(db, deviceId, storageScenarios.oneHourSpike());
     expect(db.prepare(`SELECT COUNT(*) AS n FROM findings WHERE status = 'active'`).get().n).toBe(0);
   });
 });
@@ -197,20 +197,20 @@ function seedDevice(db) {
 }
 
 // Insert each sample and evaluate, the way ingest does when a new storage reading arrives.
-function replay(db, deviceId, samples, until = Infinity) {
-  const insert = db.prepare(`INSERT INTO samples (device_id, ts, kind, "values") VALUES (?, ?, 'storage', ?)`);
+async function replay(db, deviceId, samples, until = Infinity) {
+  const insert = db.prepare(`INSERT INTO samples (device_id, ts, kind, vals) VALUES (?, ?, 'storage', ?)`);
   for (const { ts, ...values } of samples) {
     if (Date.parse(ts) > until) break;
     insert.run(deviceId, ts, JSON.stringify(values));
-    evaluateStorage(db, deviceId, defaultSettings, new Date(ts));
+    await evaluateStorage(db, deviceId, defaultSettings, new Date(ts));
   }
 }
 
 describe('storage lifecycle (2 detections to show, 3 normal to clear)', () => {
-  it('persistent slow disk becomes active Watch on day 1 of the slowdown, never above Watch', () => {
+  it('persistent slow disk becomes active Watch on day 1 of the slowdown, never above Watch', async () => {
     const db = openDb(':memory:');
     const id = seedDevice(db);
-    replay(db, id, storageScenarios.slowPersistent());
+    await replay(db, id, storageScenarios.slowPersistent());
     const rows = db.prepare(`SELECT * FROM findings WHERE rule = 'storage_slow'`).all();
     expect(rows).toHaveLength(1);
     expect(rows[0].status).toBe('active');
@@ -218,24 +218,24 @@ describe('storage lifecycle (2 detections to show, 3 normal to clear)', () => {
     expect(Date.parse(rows[0].first_seen)).toBeLessThan(at(8).getTime());
   });
 
-  it('a skipped rule (SMART went missing) does not clear an active SMART finding', () => {
+  it('a skipped rule (SMART went missing) does not clear an active SMART finding', async () => {
     const db = openDb(':memory:');
     const id = seedDevice(db);
     const wear = storageScenarios.nvmeWear85();
-    replay(db, id, wear.slice(0, 10));
+    await replay(db, id, wear.slice(0, 10));
     expect(db.prepare(`SELECT status FROM findings WHERE rule = 'storage_wear'`).get().status).toBe('active');
     const later = wear.slice(10, 20).map((s) => ({ ...s, percentageUsed: null, criticalWarning: null }));
-    replay(db, id, later);
+    await replay(db, id, later);
     expect(db.prepare(`SELECT status FROM findings WHERE rule = 'storage_wear'`).get().status).toBe('active');
   });
 
-  it('clears after 3 normal checks', () => {
+  it('clears after 3 normal checks', async () => {
     const db = openDb(':memory:');
     const id = seedDevice(db);
     const s = storageScenarios.freeSpace(4);
-    replay(db, id, s.slice(0, 5));
+    await replay(db, id, s.slice(0, 5));
     expect(db.prepare(`SELECT status FROM findings WHERE rule = 'storage_free_space'`).get().status).toBe('active');
-    replay(db, id, s.slice(5, 8).map((x) => ({ ...x, freeSpacePct: 30 })));
+    await replay(db, id, s.slice(5, 8).map((x) => ({ ...x, freeSpacePct: 30 })));
     expect(db.prepare(`SELECT status FROM findings WHERE rule = 'storage_free_space'`).get().status).toBe('cleared');
   });
 });

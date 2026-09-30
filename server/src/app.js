@@ -5,7 +5,7 @@ import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import { ZodError } from 'zod';
 import { defaultSettings } from './settings.js';
-import { requireUser, requireDevice } from './middleware/auth.js';
+import { requireUser, requireDevice, wrap } from './middleware/auth.js';
 import { authRoutes } from './routes/auth.js';
 import { deviceRoutes } from './routes/devices.js';
 import { ingestRoutes } from './routes/ingest.js';
@@ -36,10 +36,11 @@ export function createApp({
   app.use('/api/devices', requireUser(jwtSecret), deviceRoutes({ db, settings, now }));
 
   // Demo data: simulated devices for the signed-in user, and the synthetic fleet view. Always labelled.
-  app.post('/api/demo/seed', requireUser(jwtSecret), (req, res) => {
-    const result = seedDemo(db, req.user.id, settings, now());
+  app.post('/api/demo/seed', requireUser(jwtSecret), wrap(async (req, res) => {
+    const result = await seedDemo(db, req.user.id, settings, now());
     res.status(result.created.length ? 201 : 200).json(result);
-  });
+  }));
+  app.get('/api/me', requireUser(jwtSecret), (req, res) => res.json({ id: req.user.id, email: req.user.email, database: db.dialect }));
   app.get('/api/fleet/demo', requireUser(jwtSecret), (_req, res) => res.json(fleetDemo(settings)));
   app.use(
     '/api/agent',

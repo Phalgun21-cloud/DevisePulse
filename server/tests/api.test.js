@@ -199,7 +199,7 @@ describe('ingest validation', () => {
       { ts: '2026-07-01T00:00:00Z', kind: 'cpu', values: { cpuLoadPct: 4.5, cpuTempC: null, cpuFreqMHz: null } },
     ]);
     expect(res.status).toBe(200);
-    const row = db.prepare(`SELECT "values" AS v FROM samples`).get();
+    const row = db.prepare(`SELECT vals AS v FROM samples`).get();
     expect(JSON.parse(row.v).cpuTempC).toBeNull();
   });
 
@@ -301,46 +301,46 @@ describe('finding lifecycle (hysteresis)', () => {
     ).run();
   }
   const insertSamples = (db, series) => {
-    const stmt = db.prepare(`INSERT OR IGNORE INTO samples (device_id, ts, kind, "values") VALUES (1, ?, 'battery', ?)`);
+    const stmt = db.prepare(`INSERT OR IGNORE INTO samples (device_id, ts, kind, vals) VALUES (1, ?, 'battery', ?)`);
     for (const s of series) stmt.run(s.ts, JSON.stringify({ designWh: s.designWh, fullChargeWh: s.fullChargeWh }));
   };
   const status = (db) => db.prepare('SELECT status, detect_count AS d, clear_count AS c FROM findings').all();
 
-  it('a one-off detection that goes away is deleted and never shown', () => {
+  it('a one-off detection that goes away is deleted and never shown', async () => {
     const db = openDb(':memory:');
     seedDevice(db);
     insertSamples(db, scenarios.slowDecline());
-    evaluateBattery(db, 1, defaultSettings, NOW);
+    await evaluateBattery(db, 1, defaultSettings, NOW);
     expect(status(db)).toEqual([{ status: 'pending', d: 1, c: 0 }]);
 
     db.exec('DELETE FROM samples');
     insertSamples(db, scenarios.healthy());
-    evaluateBattery(db, 1, defaultSettings, NOW);
+    await evaluateBattery(db, 1, defaultSettings, NOW);
     expect(status(db)).toEqual([]);
   });
 
-  it('an active finding clears only after 3 consecutive normal checks', () => {
+  it('an active finding clears only after 3 consecutive normal checks', async () => {
     const db = openDb(':memory:');
     seedDevice(db);
     insertSamples(db, scenarios.slowDecline());
-    evaluateBattery(db, 1, defaultSettings, NOW);
-    evaluateBattery(db, 1, defaultSettings, NOW);
+    await evaluateBattery(db, 1, defaultSettings, NOW);
+    await evaluateBattery(db, 1, defaultSettings, NOW);
     expect(status(db)[0].status).toBe('active');
 
     db.exec('DELETE FROM samples');
     insertSamples(db, scenarios.healthy());
-    evaluateBattery(db, 1, defaultSettings, NOW);
-    evaluateBattery(db, 1, defaultSettings, NOW);
+    await evaluateBattery(db, 1, defaultSettings, NOW);
+    await evaluateBattery(db, 1, defaultSettings, NOW);
     expect(status(db)[0]).toMatchObject({ status: 'active', c: 2 });
-    evaluateBattery(db, 1, defaultSettings, NOW);
+    await evaluateBattery(db, 1, defaultSettings, NOW);
     expect(status(db)[0].status).toBe('cleared');
   });
 
-  it('never keeps more than one live finding per device and rule', () => {
+  it('never keeps more than one live finding per device and rule', async () => {
     const db = openDb(':memory:');
     seedDevice(db);
     insertSamples(db, scenarios.slowDecline());
-    for (let i = 0; i < 5; i++) evaluateBattery(db, 1, defaultSettings, NOW);
+    for (let i = 0; i < 5; i++) await evaluateBattery(db, 1, defaultSettings, NOW);
     expect(count(db, `SELECT COUNT(*) AS n FROM findings WHERE status IN ('pending','active')`)).toBe(1);
   });
 });

@@ -9,15 +9,17 @@ import { loadBatterySamples, loadStorageSamples, loadCpuSamples } from './evalua
 const DAY_MS = 86_400_000;
 const round1 = (n) => Math.round(n * 10) / 10;
 
-function latest(db, deviceId, kind) {
-  const row = db
-    .prepare(`SELECT ts, "values" AS v FROM samples WHERE device_id = ? AND kind = ? ORDER BY ts DESC LIMIT 1`)
-    .get(deviceId, kind);
+async function latest(db, deviceId, kind) {
+  const row = await db.get(
+    `SELECT ts, vals AS v FROM samples WHERE device_id = ? AND kind = ? ORDER BY ts DESC LIMIT 1`,
+    deviceId,
+    kind,
+  );
   return row ? { ts: row.ts, values: JSON.parse(row.v) } : null;
 }
 
-export function deviceSummary(db, device, settings, clock) {
-  const batterySamples = loadBatterySamples(db, device.id);
+export async function deviceSummary(db, device, settings, clock) {
+  const batterySamples = await loadBatterySamples(db, device.id);
   const b = detectBattery(batterySamples, settings, clock);
   let forecast = null;
   if (b.forecast) {
@@ -26,10 +28,10 @@ export function deviceSummary(db, device, settings, clock) {
     forecast = rest;
   }
 
-  const cpu = latest(db, device.id, 'cpu');
+  const cpu = await latest(db, device.id, 'cpu');
   const cpuNow = cpu ? new Date(cpu.ts) : clock;
-  const storage = detectStorage(loadStorageSamples(db, device.id, settings, clock), settings, clock);
-  const thermal = detectThermal(loadCpuSamples(db, device.id, settings, cpuNow), settings, cpuNow);
+  const storage = detectStorage(await loadStorageSamples(db, device.id, settings, clock), settings, clock);
+  const thermal = detectThermal(await loadCpuSamples(db, device.id, settings, cpuNow), settings, cpuNow);
 
   return {
     battery: {
@@ -48,6 +50,6 @@ export function deviceSummary(db, device, settings, clock) {
       .map((p) => ({ date: new Date(p.day * DAY_MS).toISOString().slice(0, 10), healthPct: round1(p.healthPct) })),
     storage: { status: storage.status, skippedRules: storage.skippedRules },
     thermal: { status: thermal.status, skippedRules: thermal.skippedRules },
-    latest: { cpu, storage: latest(db, device.id, 'storage'), battery: latest(db, device.id, 'battery') },
+    latest: { cpu, storage: await latest(db, device.id, 'storage'), battery: await latest(db, device.id, 'battery') },
   };
 }

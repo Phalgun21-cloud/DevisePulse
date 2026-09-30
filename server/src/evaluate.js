@@ -9,120 +9,125 @@ import { detectStorage, STORAGE_RULES } from './detectors/storage.js';
 import { detectThermal } from './detectors/thermal.js';
 import { explainFinding } from './explain/templates.js';
 
-export function loadBatterySamples(db, deviceId) {
-  const rows = db
-    .prepare(`SELECT ts, "values" AS v FROM samples WHERE device_id = ? AND kind = 'battery' ORDER BY ts`)
-    .all(deviceId);
+const DAY_MS = 86_400_000;
+const STORAGE_LOOKBACK_DAYS = 15; // two error windows plus slack; the baseline window is loaded separately
+
+const parseRows = (rows) => rows.map((r) => ({ ts: r.ts, ...JSON.parse(r.v) }));
+
+export async function loadBatterySamples(db, deviceId) {
+  const rows = await db.all(`SELECT ts, vals AS v FROM samples WHERE device_id = ? AND kind = 'battery' ORDER BY ts`, deviceId);
   return rows.map((r) => {
     const v = JSON.parse(r.v);
     return { ts: r.ts, fullChargeWh: v.fullChargeWh, designWh: v.designWh };
   });
 }
 
-function syncRule(db, deviceId, rule, detected, cfg, nowIso) {
-  const live = db
-    .prepare(`SELECT * FROM findings WHERE device_id = ? AND rule = ? AND status IN ('pending','active')`)
-    .get(deviceId, rule);
+async function syncRule(db, deviceId, rule, detected, cfg, nowIso) {
+  const live = await db.get(
+    `SELECT * FROM findings WHERE device_id = ? AND rule = ? AND status IN ('pending','active')`,
+    deviceId,
+    rule,
+  );
 
   if (detected) {
     const explanation = explainFinding(detected);
     const evidence = JSON.stringify(detected.evidence);
     if (!live) {
       const status = cfg.confirmDetections <= 1 ? 'active' : 'pending';
-      db.prepare(
+      await db.run(
         `INSERT INTO findings (device_id, rule, component, severity, title, evidence, explanation,
                                status, detect_count, clear_count, first_seen, last_seen)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?)`,
-      ).run(deviceId, rule, detected.component, detected.severity, detected.title, evidence, explanation, status, nowIso, nowIso);
+        deviceId, rule, detected.component, detected.severity, detected.title, evidence, explanation, status, nowIso, nowIso,
+      );
       return;
     }
     const count = live.detect_count + 1;
     const status = live.status === 'pending' && count >= cfg.confirmDetections ? 'active' : live.status;
-    db.prepare(
+    await db.run(
       `UPDATE findings SET severity = ?, title = ?, evidence = ?, explanation = ?, status = ?,
                            detect_count = ?, clear_count = 0, last_seen = ? WHERE id = ?`,
-    ).run(detected.severity, detected.title, evidence, explanation, status, count, nowIso, live.id);
+      detected.severity, detected.title, evidence, explanation, status, count, nowIso, live.id,
+    );
     return;
   }
 
   if (!live) return;
   if (live.status === 'pending') {
     // never surfaced to the user: a one-off blip just disappears
-    db.prepare('DELETE FROM findings WHERE id = ?').run(live.id);
+    await db.run('DELETE FROM findings WHERE id = ?', live.id);
     return;
   }
   const clears = live.clear_count + 1;
   if (clears >= cfg.clearAfterNormal) {
-    db.prepare(`UPDATE findings SET status = 'cleared', clear_count = ?, last_seen = ? WHERE id = ?`).run(clears, nowIso, live.id);
+    await db.run(`UPDATE findings SET status = 'cleared', clear_count = ?, last_seen = ? WHERE id = ?`, clears, nowIso, live.id);
   } else {
-    db.prepare('UPDATE findings SET clear_count = ? WHERE id = ?').run(clears, live.id);
+    await db.run('UPDATE findings SET clear_count = ? WHERE id = ?', clears, live.id);
   }
 }
 
-export function evaluateBattery(db, deviceId, settings, now = new Date()) {
-  const result = detectBattery(loadBatterySamples(db, deviceId), settings, now);
-  syncRule(db, deviceId, 'battery_wear', result.findings[0] ?? null, settings.findings, now.toISOString());
+export async function evaluateBattery(db, deviceId, settings, now = new Date()) {
+  const result = detectBattery(await loadBatterySamples(db, deviceId), settings, now);
+  await syncRule(db, deviceId, 'battery_wear', result.findings[0] ?? null, settings.findings, now.toISOString());
   return result;
 }
 
-const DAY_MS = 86_400_000;
-const STORAGE_LOOKBACK_DAYS = 15; // two error windows plus slack; the baseline window is loaded separately
-
 // The baseline window (first days) plus recent history only: storage readings arrive every 15 minutes.
-export function loadStorageSamples(db, deviceId, settings, now) {
-  const first = db
-    .prepare(`SELECT MIN(ts) AS ts FROM samples WHERE device_id = ? AND kind = 'storage'`)
-    .get(deviceId)?.ts;
+export async function loadStorageSamples(db, deviceId, settings, now) {
+  const first = (await db.get(`SELECT MIN(ts) AS ts FROM samples WHERE device_id = ? AND kind = 'storage'`, deviceId))?.ts;
   if (!first) return [];
   const baseEnd = new Date(Date.parse(first) + settings.storage.baselineDays * DAY_MS).toISOString();
   const since = new Date(now.getTime() - STORAGE_LOOKBACK_DAYS * DAY_MS).toISOString();
-  return db
-    .prepare(
-      `SELECT ts, "values" AS v FROM samples
+  return parseRows(
+    await db.all(
+      `SELECT ts, vals AS v FROM samples
        WHERE device_id = ? AND kind = 'storage' AND (ts < ? OR ts >= ?) ORDER BY ts`,
-    )
-    .all(deviceId, baseEnd, since)
-    .map((r) => ({ ts: r.ts, ...JSON.parse(r.v) }));
+      deviceId, baseEnd, since,
+    ),
+  );
 }
 
 // CPU samples for the thermal baseline week plus the recent window.
-export function loadCpuSamples(db, deviceId, settings, now) {
-  const first = db.prepare(`SELECT MIN(ts) AS ts FROM samples WHERE device_id = ? AND kind = 'cpu'`).get(deviceId)?.ts;
+export async function loadCpuSamples(db, deviceId, settings, now) {
+  const first = (await db.get(`SELECT MIN(ts) AS ts FROM samples WHERE device_id = ? AND kind = 'cpu'`, deviceId))?.ts;
   if (!first) return [];
   const baseEnd = new Date(Date.parse(first) + settings.thermal.baselineDays * DAY_MS).toISOString();
   const since = new Date(now.getTime() - settings.thermal.recentHours * 3_600_000).toISOString();
-  return db
-    .prepare(
-      `SELECT ts, "values" AS v FROM samples
+  return parseRows(
+    await db.all(
+      `SELECT ts, vals AS v FROM samples
        WHERE device_id = ? AND kind = 'cpu' AND (ts < ? OR (ts >= ? AND ts <= ?)) ORDER BY ts`,
-    )
-    .all(deviceId, baseEnd, since, now.toISOString())
-    .map((r) => ({ ts: r.ts, ...JSON.parse(r.v) }));
+      deviceId, baseEnd, since, now.toISOString(),
+    ),
+  );
 }
 
 // CPU samples arrive every minute; the thermal trend runs at most once per `evaluateEveryMinutes` of DATA time
 // (so a backlog uploaded after a network outage is judged at the times it was measured). Returns whether it ran.
-export function evaluateThermalIfDue(db, deviceId, settings, dataNow) {
-  const last = db.prepare(`SELECT last_ts FROM evaluations WHERE device_id = ? AND detector = 'thermal'`).get(deviceId);
+export async function evaluateThermalIfDue(db, deviceId, settings, dataNow) {
+  const last = await db.get(`SELECT last_ts FROM evaluations WHERE device_id = ? AND detector = 'thermal'`, deviceId);
   if (last && dataNow.getTime() - Date.parse(last.last_ts) < settings.thermal.evaluateEveryMinutes * 60_000) return false;
-  db.prepare(
-    `INSERT INTO evaluations (device_id, detector, last_ts) VALUES (?, 'thermal', ?)
-     ON CONFLICT (device_id, detector) DO UPDATE SET last_ts = excluded.last_ts`,
-  ).run(deviceId, dataNow.toISOString());
-  const result = detectThermal(loadCpuSamples(db, deviceId, settings, dataNow), settings, dataNow);
+  const upsert =
+    db.dialect === 'mysql'
+      ? `INSERT INTO evaluations (device_id, detector, last_ts) VALUES (?, 'thermal', ?)
+         ON DUPLICATE KEY UPDATE last_ts = VALUES(last_ts)`
+      : `INSERT INTO evaluations (device_id, detector, last_ts) VALUES (?, 'thermal', ?)
+         ON CONFLICT (device_id, detector) DO UPDATE SET last_ts = excluded.last_ts`;
+  await db.run(upsert, deviceId, dataNow.toISOString());
+  const result = detectThermal(await loadCpuSamples(db, deviceId, settings, dataNow), settings, dataNow);
   // Only a real comparison is a check: "collecting baseline" or "no comparable load" neither confirms nor clears.
   if (result.status === 'ok') {
-    syncRule(db, deviceId, 'thermal', result.findings[0] ?? null, settings.findings, dataNow.toISOString());
+    await syncRule(db, deviceId, 'thermal', result.findings[0] ?? null, settings.findings, dataNow.toISOString());
   }
   return true;
 }
 
-export function evaluateStorage(db, deviceId, settings, now = new Date()) {
-  const result = detectStorage(loadStorageSamples(db, deviceId, settings, now), settings, now);
+export async function evaluateStorage(db, deviceId, settings, now = new Date()) {
+  const result = detectStorage(await loadStorageSamples(db, deviceId, settings, now), settings, now);
   for (const rule of STORAGE_RULES) {
     // Missing data is not a "normal" check: a skipped rule neither confirms nor clears a finding.
     if (result.skippedRules.includes(rule)) continue;
-    syncRule(db, deviceId, rule, result.findings.find((f) => f.rule === rule) ?? null, settings.findings, now.toISOString());
+    await syncRule(db, deviceId, rule, result.findings.find((f) => f.rule === rule) ?? null, settings.findings, now.toISOString());
   }
   return result;
 }

@@ -22,48 +22,33 @@ function shift(samples, clock) {
   return samples.map((s) => ({ ...s, ts: new Date(Date.parse(s.ts) + offset).toISOString() }));
 }
 
-function replay(db, deviceId, kind, samples, onEach) {
-  const insert = db.prepare(`INSERT OR IGNORE INTO samples (device_id, ts, kind, "values") VALUES (?, ?, ?, ?)`);
+async function replay(db, deviceId, kind, samples, onEach) {
   for (const { ts, ...values } of samples) {
-    insert.run(deviceId, ts, kind, JSON.stringify(values));
-    onEach(new Date(ts));
+    await db.run(`INSERT OR IGNORE INTO samples (device_id, ts, kind, vals) VALUES (?, ?, ?, ?)`, deviceId, ts, kind, JSON.stringify(values));
+    await onEach(new Date(ts));
   }
 }
 
-export function seedDemo(db, userId, settings, clock) {
-  const existing = db
-    .prepare(`SELECT id, name FROM devices WHERE user_id = ? AND is_simulated = 1 ORDER BY id`)
-    .all(userId);
+export async function seedDemo(db, userId, settings, clock) {
+  const existing = await db.all(`SELECT id, name FROM devices WHERE user_id = ? AND is_simulated = 1 ORDER BY id`, userId);
   const have = new Set(existing.map((d) => d.name));
   const created = [];
 
   for (const spec of DEMO_DEVICES) {
     if (have.has(spec.name)) continue;
-    const info = db
-      .prepare(
+    const id = await db.tx(async (t) => {
+      const info = await t.run(
         `INSERT INTO devices (user_id, name, model, os, bios, token_hash, is_simulated, created_at)
          VALUES (?, ?, ?, 'Simulated', ?, ?, 1, ?)`,
-      )
-      .run(userId, spec.name, spec.model, spec.bios, hashToken(crypto.randomBytes(24).toString('hex')), clock.toISOString());
-    const id = Number(info.lastInsertRowid);
-
-    db.exec('BEGIN');
-    try {
-      if (spec.battery) {
-        replay(db, id, 'battery', shift(spec.battery(), clock), (t) => evaluateBattery(db, id, settings, t));
-      }
-      if (spec.storage) {
-        replay(db, id, 'storage', shift(spec.storage(), clock), (t) => evaluateStorage(db, id, settings, t));
-      }
-      if (spec.cpu) {
-        replay(db, id, 'cpu', shift(spec.cpu(), clock), (t) => evaluateThermalIfDue(db, id, settings, t));
-      }
-      db.prepare('UPDATE devices SET last_seen = ? WHERE id = ?').run(clock.toISOString(), id);
-      db.exec('COMMIT');
-    } catch (err) {
-      db.exec('ROLLBACK');
-      throw err;
-    }
+        userId, spec.name, spec.model, spec.bios, hashToken(crypto.randomBytes(24).toString('hex')), clock.toISOString(),
+      );
+      const newId = Number(info.lastInsertRowid);
+      if (spec.battery) await replay(t, newId, 'battery', shift(spec.battery(), clock), (at) => evaluateBattery(t, newId, settings, at));
+      if (spec.storage) await replay(t, newId, 'storage', shift(spec.storage(), clock), (at) => evaluateStorage(t, newId, settings, at));
+      if (spec.cpu) await replay(t, newId, 'cpu', shift(spec.cpu(), clock), (at) => evaluateThermalIfDue(t, newId, settings, at));
+      await t.run('UPDATE devices SET last_seen = ? WHERE id = ?', clock.toISOString(), newId);
+      return newId;
+    });
     created.push({ id, name: spec.name, scenario: spec.note });
   }
   return { created, devices: DEMO_DEVICES.map((d) => ({ name: d.name, scenario: d.note })) };
