@@ -4,7 +4,10 @@
   "version": "0.1.0",
   "description": "DevicePulse: predictive laptop health monitoring (agent + API + dashboard)",
   "scripts": {
-    "install:all": "npm --prefix server install",
+    "install:all": "npm --prefix server install && npm --prefix web install",
+    "build": "npm --prefix web run build",
+    "start": "npm --prefix server start",
+    "dev:web": "npm --prefix web run dev",
     "test:server": "npm --prefix server test",
     "test:agent": "python -m pytest agent -q",
     "test": "npm run test:server && npm run test:agent",

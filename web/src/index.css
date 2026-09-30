@@ -1,0 +1,39 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --color-ground: #f4f3ee;
+  --color-panel: #ffffff;
+  --color-line: #dedcd3;
+  --color-soft: #eceae2;
+  --color-ink: #1b1d1f;
+  --color-muted: #4a5056;
+  --color-brand: #0b5e5a;
+  --color-brand-dark: #073f3c;
+  --color-brand-soft: #e4f1ef;
+  --color-sim: #4b2f8f;
+  --color-sim-soft: #eee8fa;
+}
+
+/* In the base layer so utility classes (text-white on a link-styled button, header links) win over these defaults.
+   Unlayered rules would override every Tailwind utility. */
+@layer base {
+  body {
+    background: var(--color-ground);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+  }
+
+  a {
+    color: var(--color-brand);
+  }
+  a:hover {
+    color: var(--color-brand-dark);
+  }
+
+  :focus-visible {
+    outline: 3px solid #2563eb;
+    outline-offset: 2px;
+  }
+}

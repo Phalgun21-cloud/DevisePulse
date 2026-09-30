@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import express from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
@@ -8,6 +10,7 @@ import { authRoutes } from './routes/auth.js';
 import { deviceRoutes } from './routes/devices.js';
 import { ingestRoutes } from './routes/ingest.js';
 import { agentRoutes } from './routes/agent.js';
+import { seedDemo, fleetDemo } from './demo.js';
 
 export function createApp({
   db,
@@ -16,6 +19,7 @@ export function createApp({
   now = () => new Date(),
   corsOrigin = true,
   ingestLimit = { windowMs: 60_000, limit: 120 },
+  webDist = null,
 }) {
   if (!jwtSecret || jwtSecret.length < 16) {
     throw new Error('JWT_SECRET must be set to at least 16 characters');
@@ -30,6 +34,13 @@ export function createApp({
 
   app.use('/api/auth', authRoutes({ db, jwtSecret }));
   app.use('/api/devices', requireUser(jwtSecret), deviceRoutes({ db, settings, now }));
+
+  // Demo data: simulated devices for the signed-in user, and the synthetic fleet view. Always labelled.
+  app.post('/api/demo/seed', requireUser(jwtSecret), (req, res) => {
+    const result = seedDemo(db, req.user.id, settings, now());
+    res.status(result.created.length ? 201 : 200).json(result);
+  });
+  app.get('/api/fleet/demo', requireUser(jwtSecret), (_req, res) => res.json(fleetDemo(settings)));
   app.use(
     '/api/agent',
     rateLimit({ ...ingestLimit, standardHeaders: true, legacyHeaders: false, message: { error: 'rate_limited' } }),
@@ -42,6 +53,12 @@ export function createApp({
     requireDevice(db),
     ingestRoutes({ db, settings, now }),
   );
+
+  // The built dashboard (web/dist), when present: static files plus the single-page-app fallback.
+  if (webDist && fs.existsSync(path.join(webDist, 'index.html'))) {
+    app.use(express.static(webDist, { index: false, maxAge: '1h' }));
+    app.get(/^\/(?!api\/).*/, (_req, res) => res.sendFile(path.join(webDist, 'index.html')));
+  }
 
   app.use((_req, res) => res.status(404).json({ error: 'not_found' }));
 

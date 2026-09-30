@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { hashToken, newDeviceToken } from '../middleware/auth.js';
 import { expireStale, publicRequest } from '../diagnoseRequests.js';
+import { deviceSummary } from '../summary.js';
 
 const createDevice = z.object({
   name: z.string().trim().min(1).max(80),
@@ -109,6 +110,23 @@ export function deviceRoutes({ db, settings, now }) {
       .prepare(`SELECT ts, "values" AS v FROM samples WHERE device_id = ? AND kind = ? ORDER BY ts DESC LIMIT ?`)
       .all(device.id, kind, limit);
     res.json({ samples: rows.reverse().map((s) => ({ ts: s.ts, values: JSON.parse(s.v) })) });
+  });
+
+  // Everything the device page needs: current state per component. Forecasts are month ranges only (rule 1).
+  r.get('/:id', (req, res) => {
+    const device = ownDevice(req, res);
+    if (!device) return;
+    res.json({ device: publicDevice(device), summary: deviceSummary(db, device, settings, now()) });
+  });
+
+  r.get('/:id/diagnose', (req, res) => {
+    const device = ownDevice(req, res);
+    if (!device) return;
+    expireStale(db, device.id, settings, now());
+    const rows = db
+      .prepare('SELECT * FROM diagnose_requests WHERE device_id = ? ORDER BY id DESC LIMIT 10')
+      .all(device.id);
+    res.json({ requests: rows.map(publicRequest) });
   });
 
   // Ask the agent for a 10 s "why is it slow" sample. One open request per device at a time.

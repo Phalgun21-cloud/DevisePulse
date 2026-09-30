@@ -1,0 +1,77 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router';
+import { api, setToken, errorText } from '../api.js';
+import { Alert, Button } from '../ui.jsx';
+
+export default function Login() {
+  const navigate = useNavigate();
+  const [mode, setMode] = useState('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function submit(e) {
+    e.preventDefault();
+    setError('');
+    setBusy(true);
+    try {
+      if (mode === 'register') await api.post('/auth/register', { email, password });
+      const { data } = await api.post('/auth/login', { email, password });
+      setToken(data.token);
+      navigate('/');
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const input = 'min-h-11 w-full rounded-lg border border-line bg-panel px-3 text-[15px]';
+  return (
+    <div className="flex min-h-screen items-center justify-center px-4">
+      <div className="flex w-full max-w-md flex-col gap-6">
+        <div className="flex flex-col gap-2">
+          <div className="text-2xl font-bold tracking-tight">DevicePulse</div>
+          <p className="m-0 text-muted">
+            Early warnings for ageing laptops, with the evidence behind every finding. Built for schools, clinics and small offices.
+          </p>
+        </div>
+        <form onSubmit={submit} className="flex flex-col gap-4 rounded-xl border border-line bg-panel p-6">
+          <h1 className="m-0 text-xl font-semibold">{mode === 'login' ? 'Sign in' : 'Create an account'}</h1>
+          {error && <Alert>{error}</Alert>}
+          <label className="flex flex-col gap-1.5 text-sm font-medium">
+            Email
+            <input className={input} type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+          </label>
+          <label className="flex flex-col gap-1.5 text-sm font-medium">
+            Password
+            <input
+              className={input}
+              type="password"
+              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+              minLength={8}
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            {mode === 'register' && <span className="text-xs font-normal text-muted">At least 8 characters.</span>}
+          </label>
+          <Button type="submit" disabled={busy}>
+            {busy ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Create account'}
+          </Button>
+          <button
+            type="button"
+            className="min-h-11 text-sm font-semibold text-brand hover:underline"
+            onClick={() => {
+              setMode(mode === 'login' ? 'register' : 'login');
+              setError('');
+            }}
+          >
+            {mode === 'login' ? 'New here? Create an account' : 'Already have an account? Sign in'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
