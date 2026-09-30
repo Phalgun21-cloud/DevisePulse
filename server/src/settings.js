@@ -20,6 +20,17 @@ export const defaultSettings = {
     highConfidence: { r2: 0.9, spanDays: 60 },
     moderateConfidence: { r2: 0.7, spanDays: 30 },
   },
+  diagnose: {
+    cpuPct: 85, // CPU busy at or above this is a cause
+    memUsedPct: 90, // memory used at or above this is a cause
+    swapActivityBytesMin: 1024 * 1024, // paging during the 10 s window counts as swap activity
+    diskBusyPct: 80, // disk busy above this is a cause
+    diskLatencyRatio: 3, // latency this many times the device's own baseline is a cause
+    throttleFreqRatio: 0.75, // current/max frequency below this ...
+    throttleMinLoadPct: 70, // ... while CPU load is at least this is throttling
+    baselineMinDiagnoses: 3, // prior diagnoses needed before a latency baseline exists
+    requestExpiryMinutes: 10, // a pending request nobody collected is dropped after this
+  },
 };
 
 export function withOverrides(overrides = {}) {
@@ -27,5 +38,6 @@ export function withOverrides(overrides = {}) {
     ...defaultSettings,
     findings: { ...defaultSettings.findings, ...(overrides.findings ?? {}) },
     battery: { ...defaultSettings.battery, ...(overrides.battery ?? {}) },
+    diagnose: { ...defaultSettings.diagnose, ...(overrides.diagnose ?? {}) },
   };
 }

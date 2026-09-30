@@ -52,6 +52,18 @@ CREATE TABLE IF NOT EXISTS findings (
   last_seen TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_findings_device ON findings (device_id, status);
+
+CREATE TABLE IF NOT EXISTS diagnose_requests (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  device_id INTEGER NOT NULL REFERENCES devices(id),
+  status TEXT NOT NULL,            -- pending | running | done | expired
+  created_at TEXT NOT NULL,
+  claimed_at TEXT,
+  completed_at TEXT,
+  sample TEXT,
+  result TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_diagnose_device ON diagnose_requests (device_id, status);
 `;
 
 export function openDb(file = ':memory:') {

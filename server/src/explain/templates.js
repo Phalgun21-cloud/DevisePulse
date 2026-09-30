@@ -41,6 +41,36 @@ export function explainBattery(finding) {
   return parts.join(' ');
 }
 
+const causeText = {
+  cpu_saturated: (c) =>
+    `The processor was ${c.evidence.cpuPct}% busy` +
+    (c.process ? `, and ${c.process} was the largest user (${c.evidence.topProcessCpuPct}% of CPU)` : '') +
+    '. That is consistent with the slowdown.',
+  memory_pressure: (c) =>
+    `Memory was ${c.evidence.memUsedPct ?? 'heavily'}% used` +
+    (c.evidence.swapActivityBytes > 0 ? ' and the system was paging to disk' : '') +
+    (c.process ? `; ${c.process} held the most (${c.evidence.topProcessMemMb} MB)` : '') +
+    '. Running short of memory may make everything feel slow.',
+  disk_saturated: (c) =>
+    `The disk was ${c.evidence.diskBusyPct ?? 'very'}% busy` +
+    (c.evidence.latencyRatio ? `, with response times ${c.evidence.latencyRatio}x this laptop's usual` : '') +
+    '. A saturated disk is consistent with slow opening and saving.',
+  cpu_throttled: (c) =>
+    `The processor ran at ${Math.round(c.evidence.cpuFreqRatio * 100)}% of its top speed while busy. ` +
+    'That may mean it is slowing itself down to stay cool or save power.',
+};
+
+export function explainDiagnosis(result) {
+  if (!result.causes.length) {
+    return (
+      'No clear cause was found in this 10-second sample. The slowdown may be intermittent, ' +
+      'so try again while it is happening.'
+    );
+  }
+  const lines = result.causes.map((c) => `${c.rank}. ${causeText[c.rule](c)}`);
+  return `Likely causes, most prominent first (based on one 10-second sample):\n${lines.join('\n')}`;
+}
+
 export function explainFinding(finding) {
   switch (finding.rule) {
     case 'battery_wear':

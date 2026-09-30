@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { hashToken, newDeviceToken } from '../middleware/auth.js';
+import { expireStale, publicRequest } from '../diagnoseRequests.js';
 
 const createDevice = z.object({
   name: z.string().trim().min(1).max(80),
@@ -34,7 +35,7 @@ const publicFinding = (f) => ({
   lastSeen: f.last_seen,
 });
 
-export function deviceRoutes({ db }) {
+export function deviceRoutes({ db, settings, now }) {
   const r = Router();
 
   // A user may only ever touch their own devices. Unknown and foreign ids both give 404,
@@ -97,6 +98,36 @@ export function deviceRoutes({ db }) {
       .prepare(`SELECT ts, "values" AS v FROM samples WHERE device_id = ? AND kind = ? ORDER BY ts DESC LIMIT ?`)
       .all(device.id, kind, limit);
     res.json({ samples: rows.reverse().map((s) => ({ ts: s.ts, values: JSON.parse(s.v) })) });
+  });
+
+  // Ask the agent for a 10 s "why is it slow" sample. One open request per device at a time.
+  r.post('/:id/diagnose', (req, res) => {
+    const device = ownDevice(req, res);
+    if (!device) return;
+    const clock = now();
+    expireStale(db, device.id, settings, clock);
+    const open = db
+      .prepare(`SELECT * FROM diagnose_requests WHERE device_id = ? AND status IN ('pending', 'running') ORDER BY id DESC`)
+      .get(device.id);
+    if (open) return res.status(200).json(publicRequest(open));
+    const info = db
+      .prepare(`INSERT INTO diagnose_requests (device_id, status, created_at) VALUES (?, 'pending', ?)`)
+      .run(device.id, clock.toISOString());
+    const row = db.prepare('SELECT * FROM diagnose_requests WHERE id = ?').get(Number(info.lastInsertRowid));
+    res.status(202).json(publicRequest(row));
+  });
+
+  // The page polls this until status is done (or expired).
+  r.get('/:id/diagnose/:reqId', (req, res) => {
+    const device = ownDevice(req, res);
+    if (!device) return;
+    expireStale(db, device.id, settings, now());
+    const reqId = Number(req.params.reqId);
+    const row = Number.isInteger(reqId)
+      ? db.prepare('SELECT * FROM diagnose_requests WHERE id = ? AND device_id = ?').get(reqId, device.id)
+      : undefined;
+    if (!row) return res.status(404).json({ error: 'not_found' });
+    res.json(publicRequest(row));
   });
 
   return r;

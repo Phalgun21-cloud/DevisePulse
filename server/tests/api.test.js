@@ -358,3 +358,129 @@ describe('hourly agent uploads', () => {
     for (const f of res.body.findings) expect(f.evidence.points).toBeLessThanOrEqual(40);
   });
 });
+
+describe('diagnose command channel', () => {
+  const sampleBody = {
+    cpuPct: 97,
+    memUsedPct: 55,
+    swapActivityBytes: 0,
+    diskBusyPct: 10,
+    diskLatencyMs: 4,
+    cpuFreqRatio: 0.95,
+    topProcesses: [{ name: 'cpu_hog.py', cpuPct: 88, memMb: 40 }],
+  };
+  const agentGet = (app, token) => request(app).get('/api/agent/commands').set('Authorization', `Bearer ${token}`);
+  const agentPost = (app, token, id, body) =>
+    request(app).post(`/api/agent/commands/${id}/result`).set('Authorization', `Bearer ${token}`).send(body);
+  const userReq = (app, jwt, method, url) => request(app)[method](url).set('Authorization', `Bearer ${jwt}`);
+
+  it('full round trip: request, agent polls, posts sample, page reads ranked causes', async () => {
+    const { app } = makeApp();
+    const jwt = await signup(app);
+    const dev = await addDevice(app, jwt);
+
+    const created = await userReq(app, jwt, 'post', `/api/devices/${dev.id}/diagnose`).expect(202);
+    expect(created.body.status).toBe('pending');
+
+    const polled = await agentGet(app, dev.deviceToken).expect(200);
+    expect(polled.body.commands).toEqual([{ id: created.body.id, type: 'diagnose', durationSec: 10 }]);
+
+    // handed out once, not on the next poll
+    expect((await agentGet(app, dev.deviceToken)).body.commands).toEqual([]);
+
+    await agentPost(app, dev.deviceToken, created.body.id, { sample: sampleBody }).expect(200);
+
+    const res = await userReq(app, jwt, 'get', `/api/devices/${dev.id}/diagnose/${created.body.id}`).expect(200);
+    expect(res.body.status).toBe('done');
+    expect(res.body.result.verdict).toBe('causes_found');
+    expect(res.body.result.causes[0]).toMatchObject({ rule: 'cpu_saturated', process: 'cpu_hog.py', rank: 1 });
+    expect(res.body.result.explanation).toMatch(/cpu_hog\.py/);
+  });
+
+  it('a second request while one is open returns the same request, not a duplicate', async () => {
+    const { app, db } = makeApp();
+    const jwt = await signup(app);
+    const dev = await addDevice(app, jwt);
+    const a = await userReq(app, jwt, 'post', `/api/devices/${dev.id}/diagnose`).expect(202);
+    const b = await userReq(app, jwt, 'post', `/api/devices/${dev.id}/diagnose`).expect(200);
+    expect(b.body.id).toBe(a.body.id);
+    expect(count(db, 'SELECT COUNT(*) AS n FROM diagnose_requests')).toBe(1);
+  });
+
+  it('a user cannot request or read a diagnosis on another user\'s device (404)', async () => {
+    const { app } = makeApp();
+    const jwtA = await signup(app, 'a@example.com');
+    const jwtB = await signup(app, 'b@example.com');
+    const dev = await addDevice(app, jwtA);
+    const created = await userReq(app, jwtA, 'post', `/api/devices/${dev.id}/diagnose`).expect(202);
+    await userReq(app, jwtB, 'post', `/api/devices/${dev.id}/diagnose`).expect(404);
+    await userReq(app, jwtB, 'get', `/api/devices/${dev.id}/diagnose/${created.body.id}`).expect(404);
+  });
+
+  it('a device cannot answer another device\'s command (404) or use it twice (409)', async () => {
+    const { app } = makeApp();
+    const jwt = await signup(app);
+    const d1 = await addDevice(app, jwt, 'one');
+    const d2 = await addDevice(app, jwt, 'two');
+    const created = await userReq(app, jwt, 'post', `/api/devices/${d1.id}/diagnose`).expect(202);
+    await agentPost(app, d2.deviceToken, created.body.id, { sample: sampleBody }).expect(404);
+    await agentPost(app, d1.deviceToken, created.body.id, { sample: sampleBody }).expect(200);
+    await agentPost(app, d1.deviceToken, created.body.id, { sample: sampleBody }).expect(409);
+  });
+
+  it('agent endpoints need a device token', async () => {
+    const { app } = makeApp();
+    await request(app).get('/api/agent/commands').expect(401);
+    await request(app).get('/api/agent/commands').set('Authorization', 'Bearer nope').expect(401);
+  });
+
+  it('rejects extra fields (the agent may send numbers and process names only)', async () => {
+    const { app } = makeApp();
+    const jwt = await signup(app);
+    const dev = await addDevice(app, jwt);
+    const created = await userReq(app, jwt, 'post', `/api/devices/${dev.id}/diagnose`).expect(202);
+    const bad = { sample: { ...sampleBody, topProcesses: [{ name: 'x.exe', cpuPct: 1, memMb: 1, cmdline: 'C:\secret' }] } };
+    await agentPost(app, dev.deviceToken, created.body.id, bad).expect(400);
+    await agentPost(app, dev.deviceToken, created.body.id, { sample: { ...sampleBody, cpuPct: 400 } }).expect(400);
+  });
+
+  it('missing sensors stay null and produce no crash and no invented cause', async () => {
+    const { app } = makeApp();
+    const jwt = await signup(app);
+    const dev = await addDevice(app, jwt);
+    const created = await userReq(app, jwt, 'post', `/api/devices/${dev.id}/diagnose`).expect(202);
+    const sparse = { cpuPct: 20, memUsedPct: null, swapActivityBytes: null, diskBusyPct: null, diskLatencyMs: null, cpuFreqRatio: null, topProcesses: [] };
+    await agentPost(app, dev.deviceToken, created.body.id, { sample: sparse }).expect(200);
+    const res = await userReq(app, jwt, 'get', `/api/devices/${dev.id}/diagnose/${created.body.id}`).expect(200);
+    expect(res.body.result.verdict).toBe('no_clear_cause');
+    expect(res.body.result.skippedRules).toEqual(expect.arrayContaining(['memory_pressure', 'disk_saturated']));
+  });
+
+  it('an uncollected request expires instead of hanging forever', async () => {
+    let clock = new Date('2026-07-05T00:00:00Z');
+    const { app } = makeApp({ now: () => clock });
+    const jwt = await signup(app);
+    const dev = await addDevice(app, jwt);
+    const created = await userReq(app, jwt, 'post', `/api/devices/${dev.id}/diagnose`).expect(202);
+    clock = new Date('2026-07-05T00:30:00Z');
+    const res = await userReq(app, jwt, 'get', `/api/devices/${dev.id}/diagnose/${created.body.id}`).expect(200);
+    expect(res.body.status).toBe('expired');
+    expect((await agentGet(app, dev.deviceToken)).body.commands).toEqual([]);
+    // a fresh request is allowed after expiry
+    await userReq(app, jwt, 'post', `/api/devices/${dev.id}/diagnose`).expect(202);
+  });
+
+  it('uses the device\'s own past disk latency as the baseline (3x rule)', async () => {
+    const { app } = makeApp();
+    const jwt = await signup(app);
+    const dev = await addDevice(app, jwt);
+    const run = async (latency) => {
+      const c = await userReq(app, jwt, 'post', `/api/devices/${dev.id}/diagnose`).expect(202);
+      await agentPost(app, dev.deviceToken, c.body.id, { sample: { ...sampleBody, cpuPct: 20, diskBusyPct: 10, diskLatencyMs: latency } }).expect(200);
+      return (await userReq(app, jwt, 'get', `/api/devices/${dev.id}/diagnose/${c.body.id}`)).body.result;
+    };
+    for (let i = 0; i < 3; i += 1) await run(4); // builds the baseline
+    const slow = await run(15);
+    expect(slow.causes.map((c) => c.rule)).toContain('disk_saturated');
+  });
+});

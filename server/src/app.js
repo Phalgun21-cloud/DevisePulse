@@ -7,6 +7,7 @@ import { requireUser, requireDevice } from './middleware/auth.js';
 import { authRoutes } from './routes/auth.js';
 import { deviceRoutes } from './routes/devices.js';
 import { ingestRoutes } from './routes/ingest.js';
+import { agentRoutes } from './routes/agent.js';
 
 export function createApp({
   db,
@@ -28,7 +29,13 @@ export function createApp({
   app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
   app.use('/api/auth', authRoutes({ db, jwtSecret }));
-  app.use('/api/devices', requireUser(jwtSecret), deviceRoutes({ db }));
+  app.use('/api/devices', requireUser(jwtSecret), deviceRoutes({ db, settings, now }));
+  app.use(
+    '/api/agent',
+    rateLimit({ ...ingestLimit, standardHeaders: true, legacyHeaders: false, message: { error: 'rate_limited' } }),
+    requireDevice(db),
+    agentRoutes({ db, settings, now }),
+  );
   app.use(
     '/api/ingest',
     rateLimit({ ...ingestLimit, standardHeaders: true, legacyHeaders: false, message: { error: 'rate_limited' } }),

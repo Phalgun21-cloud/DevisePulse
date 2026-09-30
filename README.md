@@ -12,7 +12,8 @@ explanations later. DevicePulse reports *elevated risk with a confidence label*,
 | Agent: probe, battery reader (Windows powercfg / Linux sysfs), CPU and memory, offline buffer | Built, unit-tested |
 | API: register, login, devices, ingest, findings, samples | Built, tested |
 | Battery wear + forecast detector, anti-false-alarm rules | Built, tested |
-| Storage, thermal, root-cause detectors | Next |
+| Slow-laptop diagnosis: command channel, 10 s sample, ranked causes | Built, tested, real CPU-load gate passed on Windows 11 |
+| Storage, thermal detectors | Next |
 | React dashboard, simulator replay, fleet demo | Next |
 
 See `docs/test-results.md` for what has and has not been verified.
@@ -68,6 +69,25 @@ Invoke-RestMethod "$b/api/devices/1/findings?status=all" -Headers @{ Authorizati
 A battery forecast needs at least 5 distinct days spanning 14 days of readings. Until then the
 API reports no finding rather than guessing.
 
+## Diagnose a slow laptop
+
+With the agent running, ask for a 10-second sample (the agent checks for requests every 15 seconds):
+
+```powershell
+$req = Invoke-RestMethod -Method Post "$b/api/devices/1/diagnose" -Headers @{ Authorization = "Bearer $jwt" }
+Invoke-RestMethod "$b/api/devices/1/diagnose/$($req.id)" -Headers @{ Authorization = "Bearer $jwt" }   # repeat until status is done
+```
+
+To test it, create load with `python chaos\cpu_hog.py` (asks first, 120 s cap, refuses on battery below 30%) and diagnose while it runs.
+The agent sends numbers and the names of the top 5 processes only, never command lines or paths.
+
+To run the whole check automatically (tests, a throwaway API on port 4100, the real agent, an idle diagnosis,
+then `cpu_hog.py` with a diagnosis under load), which prints PASS/FAIL per step:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File chaos\e2e_diagnose.ps1
+```
+
 ## Tests
 
 ```powershell
@@ -84,7 +104,7 @@ Thresholds for every detector live in `server/src/settings.js`. Change them ther
 agent/       Python agent, probe, collectors, pytest tests
 server/      Express API, SQLite, detectors, explanations, Vitest tests
 simulator/   Seeded synthetic telemetry (used by tests, later by the demo)
-chaos/       Safe fault-injection scripts for real-device tests (coming)
+chaos/       Safe fault-injection scripts for real-device tests (cpu_hog.py so far)
 web/         React dashboard (coming)
 docs/        probe-results/, test-results.md
 ```
