@@ -239,6 +239,21 @@ database user exists yet, and the root password was not used. Run `tests/mysql.t
 unexpectedly" (103 of 135 run); each file passed alone (39, 17, 18, 32, 19, 10). Mitigation: `fileParallelism: false`.
 The root cause (likely memory in parallel workers holding large in-memory databases) is not confirmed.
 
+## Device dashboard with date ranges, 2026-09-30
+
+New `GET /api/devices/:id/timeseries?kind=cpu|storage|battery&range=24h|7d|30d|90d|1y|all` (or `from`/`to`): readings
+bucketed so a chart has at most ~240 points (1 min to 30 days per bucket), avg/min/max per bucket, range statistics
+(avg, min, peak, latest, count), missing sensors null with count 0, gaps in time break the line. Raw samples accept
+`from`/`to`. Tests: **server 146 passed, 1 skipped (MySQL)** (10 new in `timeseries.test.js`, seen failing first).
+
+Device page is now a tabbed dashboard (Overview, Performance, Storage, Battery, Findings timeline, Diagnoses, Raw data
+with CSV export, Settings), with a date-range picker (24 h / 7 d / 30 d / 90 d / all / custom dates) kept in the URL,
+and auto-refresh every minute for real devices. Checked by hand in the browser (not an automated test): real laptop
+Overview over 24 h (29 readings, avg CPU 22.6%, peak memory 88.8%, disk test avg 24.7 ms); LAB-21 Performance over 30 d
+(4,032 readings in 3-hour buckets); LAB-12 Storage (960 disk tests) and Findings timeline; LAB-07 Battery over all time
+(181 days, forecast band); real Raw data (30 rows, blanks for unmeasured). No console errors. Two display bugs found
+and fixed during the check (KPI "no readings" hint shown under real values; "0.0%" axis labels).
+
 ## Also verified by hand
 - Real server + real agent, one upload: sample stored, missing CPU temperature kept as null (not zero).
 - Wrong device token: server answers 401, agent keeps the sample buffered.

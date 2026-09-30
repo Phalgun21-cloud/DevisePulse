@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { hashToken, newDeviceToken, wrap } from '../middleware/auth.js';
 import { expireStale, publicRequest } from '../diagnoseRequests.js';
 import { deviceSummary } from '../summary.js';
+import { loadTimeseries } from '../timeseries.js';
 
 const createDevice = z.object({
   name: z.string().trim().min(1).max(80),
@@ -139,18 +140,31 @@ export function deviceRoutes({ db, settings, now }) {
     res.json({ findings: rows.map((f) => publicFinding(f, device)) });
   }));
 
+  // Raw readings, newest last. Optional from/to (ISO) narrow the window; at most 2000 rows.
   r.get('/:id/samples', wrap(async (req, res) => {
     const device = await ownDevice(req, res);
     if (!device) return;
     const kind = z.enum(['battery', 'storage', 'cpu', 'probe']).parse(req.query.kind);
     const limit = Math.min(Number(req.query.limit) || 500, 2000);
+    const from = req.query.from ? new Date(Date.parse(req.query.from)).toISOString() : '0000';
+    const to = req.query.to ? new Date(Date.parse(req.query.to)).toISOString() : '9999';
     const rows = await db.all(
-      `SELECT ts, vals AS v FROM samples WHERE device_id = ? AND kind = ? ORDER BY ts DESC LIMIT ?`,
+      `SELECT ts, vals AS v FROM samples WHERE device_id = ? AND kind = ? AND ts >= ? AND ts <= ? ORDER BY ts DESC LIMIT ?`,
       device.id,
       kind,
+      from,
+      to,
       limit,
     );
     res.json({ samples: rows.reverse().map((s) => ({ ts: s.ts, values: JSON.parse(s.v) })) });
+  }));
+
+  // Bucketed series + range statistics for the dashboard charts.
+  r.get('/:id/timeseries', wrap(async (req, res) => {
+    const device = await ownDevice(req, res);
+    if (!device) return;
+    const kind = z.enum(['cpu', 'storage', 'battery']).parse(req.query.kind);
+    res.json(await loadTimeseries(db, device.id, kind, req.query, now()));
   }));
 
   r.get('/:id/diagnose', wrap(async (req, res) => {

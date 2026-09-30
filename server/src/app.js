@@ -68,6 +68,7 @@ export function createApp({
     if (err instanceof ZodError) {
       return res.status(400).json({ error: 'invalid_request', issues: err.issues.map((i) => ({ path: i.path.join('.'), message: i.message })) });
     }
+    if (err.status === 400 && err.code) return res.status(400).json({ error: err.code });
     if (err.type === 'entity.too.large') return res.status(413).json({ error: 'payload_too_large' });
     if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'invalid_json' });
     console.error(err);
