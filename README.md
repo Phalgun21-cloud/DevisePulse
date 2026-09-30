@@ -36,13 +36,28 @@ Open http://localhost:4000, create an account, then either **Add device** (it sh
 run on the laptop) or **Load demo devices (simulated)**. For UI development with hot reload run `npm run dev:server`
 and `npm run dev:web` (http://localhost:5173, which proxies `/api` to :4000).
 
+### Use MySQL 8.0
+
+Without configuration the app uses a local SQLite file. To use MySQL 8.0, create a database and user once
+(as root in MySQL Workbench or the `mysql` client):
+
+```sql
+CREATE DATABASE devicepulse CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;
+CREATE USER 'devicepulse'@'localhost' IDENTIFIED BY 'choose-a-password';
+GRANT ALL PRIVILEGES ON devicepulse.* TO 'devicepulse'@'localhost';
+```
+
+then add `DATABASE_URL=mysql://devicepulse:choose-a-password@localhost:3306/devicepulse` to `server\.env` and
+restart. Tables are created automatically. The account panel in the sidebar shows which database is in use.
+To run the MySQL end-to-end test against a throwaway database: set `TEST_MYSQL_URL` and run `npx vitest run mysql`
+in `server` (it drops and recreates the DevicePulse tables in that database).
+
 ### Deploy (one web service)
 
 The API serves the built dashboard, so one service is enough (Render, Railway or Fly.io):
 build command `npm run install:all && npm run build`, start command `npm start`, environment `JWT_SECRET`
-(long random string) and optionally `DATABASE_FILE`. **Known limit:** the database is SQLite. On free hosts the
-file system is wiped on restart, so accounts and readings are lost unless a persistent disk is attached. Postgres
-support (task 7) is not built yet.
+(long random string) and `DATABASE_URL` pointing at a hosted MySQL 8.0 database. Without `DATABASE_URL` it falls
+back to SQLite, which free hosts wipe on restart.
 
 ## Setup (Windows PowerShell)
 

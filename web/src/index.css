@@ -154,3 +154,13 @@
   *, *::before, *::after { animation: none !important; transition: none !important; }
   .cursor-dot, .cursor-ring { display: none; }
 }
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(12px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+.toast-in { animation: toast-in 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
+
+dialog.dp-dialog { border: 0; padding: 0; border-radius: 1rem; max-width: 28rem; width: calc(100% - 2rem); box-shadow: 0 40px 80px -30px rgba(0, 0, 0, 0.5); }
+dialog.dp-dialog[open] { animation: fade-up 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+dialog.dp-dialog::backdrop { background: rgba(20, 22, 24, 0.45); backdrop-filter: blur(4px); }

@@ -50,6 +50,10 @@ python agent\probe.py --save
 
 - SQLite via built-in `node:sqlite` (Node >= 22.13, no native build). It is loaded with `createRequire` because
   Vite/Vitest does not recognise the `node:sqlite` import.
+- **Production database is MySQL 8.0, not Postgres (user decision 2026-09-30).** All DB access goes through the async
+  adapter in `server/src/db/index.js`; MySQL (mysql2) when `DATABASE_URL=mysql://...`, SQLite otherwise and in unit
+  tests. The samples column is `vals` ("values" is reserved in MySQL). `tests/mysql.test.js` runs against a real
+  MySQL only when `TEST_MYSQL_URL` is set. Test files run sequentially (`server/vitest.config.js`).
 - Express 4: async handlers must be wrapped so rejections reach the error handler (see `routes/auth.js`).
 - Battery forecast range is slope +/- 2 standard errors (about 95%). When the decline is accelerating, the early
   bound uses the RECENT decline rate, because a straight line over all history falsely reassured (9 months vs about 3.6).
@@ -114,7 +118,7 @@ Task 2 (slow-laptop diagnosis) DONE: command channel, 10 s sample, ranked causes
 4. **DONE (simulated temperature only on the first laptop): Thermal detector.** Temperature at similar load (20-point load buckets) versus first-7-day baseline, +10 C Watch; add frequency drop for Attention. Windows usually does not expose temperature or fans, so expect simulated data only and say so in the UI.
 5. **Simulator scenarios and accuracy run.** Add every scenario above plus the 200-healthy-device run. Save results to `docs/test-results.md`. Gate: aggregate targets met.
 6. **DONE except the automated browser test (checked by hand): Web dashboard** (React, Vite, React Router, Tailwind, Recharts, Axios). Screens: login/register, devices (with one-time token and agent command), device detail (component cards, battery chart with baseline and forecast range, findings with evidence expander), diagnose, fleet demo (banner "Synthetic data", planted model+BIOS correlation with sample size). Gate: browser end-to-end test passes.
-7. **Postgres support.** Free hosts wipe local files, so SQLite will not persist when deployed. Add a Postgres adapter (Neon or Supabase) behind the same queries, keep SQLite for tests. Do this right after task 6.
+7. **REPLACED by MySQL 8.0 (adapter built; real-MySQL test pending a database user). Was: Postgres support.** Free hosts wipe local files, so SQLite will not persist when deployed. Add a Postgres adapter (Neon or Supabase) behind the same queries, keep SQLite for tests. Do this right after task 6.
 8. **Explanations for every finding type**, optional LLM rewording with Zod-validated JSON and template fallback. Tests: numbers in LLM output must appear in the evidence; banned phrases fail the test.
 9. **Real-device validation.** `chaos/` scripts (cpu_hog, mem_hog, disk_hog), unplug test, network-cut test, no-admin test, agent-restart test, then a 48-hour soak on 2 laptops (95% of samples arrive, agent under 2% CPU and 100 MB). Save results and screenshots.
 10. **Deploy and submit.** Frontend Vercel or Netlify, backend Render, Railway or Fly.io, database Neon or Supabase. README, 3-minute demo video (segments labeled Real or Simulated), evaluation slide with real numbers. The AI key must exist only in backend environment variables.

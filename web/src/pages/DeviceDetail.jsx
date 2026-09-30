@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { api, errorText } from '../api.js';
 import { BatteryChart } from '../BatteryChart.jsx';
+import { DeviceSettings } from '../DeviceSettings.jsx';
 import { Alert, Card, DataLabel, Live, Severity, Spinner, Stat, Status, timeAgo } from '../ui.jsx';
 
 const fmtRange = (f) => {
@@ -215,6 +216,8 @@ export default function DeviceDetail() {
           </details>
         )}
       </Card>
+
+      <DeviceSettings device={device} onSaved={(d) => setData((cur) => ({ ...cur, device: { ...cur.device, ...d } }))} />
     </>
   );
 }

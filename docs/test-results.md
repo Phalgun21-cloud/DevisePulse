@@ -224,6 +224,21 @@ Bugs found this way and fixed: header links and the white-on-teal Diagnose butto
 overrode Tailwind utilities); chart axis showed "100.1%".
 Animations, cursor effects and transitions are CSS/JS only and switch off under prefers-reduced-motion.
 
+## MySQL 8.0 and app shell, 2026-09-30
+
+Database access moved to one async adapter (SQLite + MySQL 8.0 via mysql2). Tests: **server 136 passed, 1 skipped**
+(`mysql.test.js`, skipped because no `TEST_MYSQL_URL`), agent 80 passed. The existing local SQLite file migrated in place
+(column `"values"` -> `vals`): after restart the real device still showed all earlier readings, and the live agent kept
+uploading. Device rename/delete (API + settings panel with a confirmation dialog), toasts, sidebar with account and
+database indicator. Saving the device model in the browser: `PATCH /api/devices/6 -> 200`.
+
+**NOT verified against a real MySQL server:** MySQL 8.0 is installed here (service MySQL80, running) but no DevicePulse
+database user exists yet, and the root password was not used. Run `tests/mysql.test.js` with `TEST_MYSQL_URL` to verify.
+
+**Intermittent crash, now reproduced:** the full server suite with test files in parallel ended with "Worker exited
+unexpectedly" (103 of 135 run); each file passed alone (39, 17, 18, 32, 19, 10). Mitigation: `fileParallelism: false`.
+The root cause (likely memory in parallel workers holding large in-memory databases) is not confirmed.
+
 ## Also verified by hand
 - Real server + real agent, one upload: sample stored, missing CPU temperature kept as null (not zero).
 - Wrong device token: server answers 401, agent keeps the sample buffered.
