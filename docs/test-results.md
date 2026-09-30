@@ -175,7 +175,7 @@ devices carry `data: "Simulated"` in the API (devices can be created with `simul
 Built: `server/src/detectors/thermal.js`, `evaluateThermalIfDue` (at most hourly, by data time; last run kept in a new
 `evaluations` table), thermal explanations, `thermal` settings block, seeded `cpuSeries` / `thermalScenarios` in the simulator,
 agent sends `pluggedIn` with every CPU sample. Tests: **server 125 passed (125)** (19 new in `thermal.test.js`),
-**agent 82 passed**. `thermal.test.js` failed on the missing module before the code existed.
+**agent 80 passed**. `thermal.test.js` failed on the missing module before the code existed.
 
 | Scenario | Result |
 | --- | --- |
