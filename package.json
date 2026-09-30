@@ -8,6 +8,7 @@
     "build": "npm --prefix web run build",
     "start": "npm --prefix server start",
     "dev:web": "npm --prefix web run dev",
+    "db:check": "npm --prefix server run db:check",
     "test:server": "npm --prefix server test",
     "test:agent": "python -m pytest agent -q",
     "test": "npm run test:server && npm run test:agent",

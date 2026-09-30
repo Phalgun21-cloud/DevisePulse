@@ -254,6 +254,26 @@ Overview over 24 h (29 readings, avg CPU 22.6%, peak memory 88.8%, disk test avg
 (181 days, forecast band); real Raw data (30 rows, blanks for unmeasured). No console errors. Two display bugs found
 and fixed during the check (KPI "no readings" hint shown under real values; "0.0%" axis labels).
 
+## MySQL 8.0 verified end to end, dark theme, all-devices dashboard (2026-09-30)
+
+**Real MySQL 8.0.45** (local service MySQL80, database `devicepulse`, user `devicepulse@localhost`, created by the user
+with `server/mysql-setup.local.sql`):
+- `tests/mysql.test.js` against `devicepulse_test`: **1 passed** (register + duplicate 409, device, ingest, duplicate
+  upload ignored by INSERT IGNORE, summary, diagnose through the agent channel, demo seed with thermal Attention, rename,
+  delete + token revoked) in 18.6 s.
+- App restarted on MySQL (log: `database: mysql`). Account, real device and demo devices created through the API; the real
+  agent uploads to it. `npm run db:check` (new) read back from MySQL: 1 user, 5 devices, 5,206 samples, 5 findings; the
+  real device had battery, CPU and storage rows.
+- Browser (by hand): signed in through the form; Dashboard showed 5 devices, 1 reporting now, 4 active findings, 5,206
+  readings, the real laptop's live values (CPU 37.1%, memory 83%, speed 0.85x, battery 55.4%, disk test 39.9 ms,
+  free 7.7%) and 6/8 signals covered; How-it-works page renders the live thresholds; device Performance tab loads.
+  No console errors.
+- Real observation: free space on this laptop is now 7.7% (below 10%), so an Information finding is expected after two
+  storage checks.
+
+Server suite on SQLite: one full run 138 passed with an unhandled-error warning (a file's worker died); the next full
+run passed all 148 (+1 MySQL skipped). **The intermittent worker crash is NOT fixed**, even with files run one at a time.
+
 ## Also verified by hand
 - Real server + real agent, one upload: sample stored, missing CPU temperature kept as null (not zero).
 - Wrong device token: server answers 401, agent keeps the sample buffered.
