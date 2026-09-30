@@ -61,7 +61,7 @@ A diagnosis workers' process name shows as `python.exe`, because the agent sends
 - Mutation check: deliberately breaking (a) the device ownership check, (b) the two-detection rule, (c) duplicate protection made the suite fail each time; code restored afterwards.
 
 ## NOT yet run (do not claim these)
-- Anything on real Windows 11 hardware: run `python agent/probe.py --save` and check `powercfg` battery parsing.
+- `python agent/probe.py --save` and the `powercfg` battery parser on real Windows (task 2 itself did run on Windows 11).
 - Task 2: memory, throttling and disk-busy rules against real load (unit-tested only; no mem_hog/disk_hog yet). Request expiry was tested only in Vitest, not by waiting 10 minutes on the real agent.
 - Storage and thermal detectors: not built yet.
 - Real-device fault injection (chaos/), 48-hour soak, web dashboard, end-to-end browser test.

@@ -57,6 +57,12 @@ python agent\probe.py --save
   spanning at least 14 days; otherwise report "collecting data" and no forecast.
 - Device tokens and passwords are stored only as hashes. Foreign and missing device ids both return 404.
 - LLM layer is optional polish. Detection and explanations must work without any AI key.
+- Disk busy % and latency are `null` when psutil counts disk operations but no time spent (seen on Windows 11:
+  `read_time`/`write_time` never advance). A latency of 0 is never sent. Swap activity is `null` on Windows.
+- The agent sends process NAMES only (top 5, with CPU % and memory MB), never command lines, paths or arguments.
+  The server's diagnose schema is `.strict()` and rejects any extra field.
+- Diagnose disk-latency baseline is the median of the device's own earlier completed diagnoses (at least 3);
+  until then only the busy-percent half of the disk rule can fire.
 
 ## Scenario table (each row needs a passing test)
 
@@ -82,14 +88,17 @@ at least 90% of runs.
 
 ## Status
 
-DONE and tested (Linux only so far): agent (probe, powercfg/sysfs battery reader, system reader, offline buffer),
-API (auth, devices, ingest, findings, samples, rate limit, validation), battery detector with forecast, finding
-lifecycle, battery explanation template, simulator for battery scenarios. 44 server tests + 13 agent tests.
+DONE and tested (Linux cloud workspace and Windows 11): agent (probe, powercfg/sysfs battery reader, system reader,
+offline buffer), API (auth, devices, ingest, findings, samples, rate limit, validation), battery detector with forecast,
+finding lifecycle, battery explanation template, simulator for battery scenarios.
+Task 2 (slow-laptop diagnosis) DONE: command channel, 10 s sample, ranked causes, `chaos/cpu_hog.py`,
+`chaos/e2e_diagnose.ps1`; gate passed on a real Windows 11 laptop (CPU ranked first, python.exe named).
+70 server tests + 40 agent tests at the end of task 2.
 
 ## Remaining tasks, in order (each ends with a gate)
 
 1. **Probe results.** Run the probe on every demo laptop, commit `docs/probe-results/*.json`. Gate: battery capacity reads on at least one laptop. Confirm the powercfg parser on real Windows.
-2. **Slow-laptop diagnosis.** Agent samples 10 s of CPU, memory, disk busy and top 5 processes. Add a command channel: server creates a pending diagnose request, agent polls `GET /api/agent/commands` every 15 s and posts the sample, page polls for ranked causes. Rules: CPU >= 85%, memory >= 90% or swap activity, disk busy > 80% or latency 3x baseline, throttling (frequency ratio < 0.75 at high load), else "no clear cause". Gate: unit tests, then `chaos/cpu_hog.py` on a real laptop names the hog process.
+2. **DONE: Slow-laptop diagnosis.** Agent samples 10 s of CPU, memory, disk busy and top 5 processes. Add a command channel: server creates a pending diagnose request, agent polls `GET /api/agent/commands` every 15 s and posts the sample, page polls for ranked causes. Rules: CPU >= 85%, memory >= 90% or swap activity, disk busy > 80% or latency 3x baseline, throttling (frequency ratio < 0.75 at high load), else "no clear cause". Gate: unit tests, then `chaos/cpu_hog.py` on a real laptop names the hog process.
 3. **Storage health.** Tier A: `smartctl -j -a` (NVMe critical warning, spare at threshold, percentage used >= 80, media errors rising; SATA reallocated/pending sectors). Tier B: agent times an 8 MB write + fsync + read every 15 min, compare 24 h median with the device's own first-3-days baseline (3x). Free space < 10% Information, < 5% Watch. Wording never says the drive will fail. Gate: scenario rows for storage pass.
 4. **Thermal detector.** Temperature at similar load (20-point load buckets) versus first-7-day baseline, +10 C Watch; add frequency drop for Attention. Windows usually does not expose temperature or fans, so expect simulated data only and say so in the UI.
 5. **Simulator scenarios and accuracy run.** Add every scenario above plus the 200-healthy-device run. Save results to `docs/test-results.md`. Gate: aggregate targets met.
